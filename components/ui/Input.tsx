@@ -1,22 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
-    View,
-    TextInput,
-    Text,
     StyleSheet,
+    Text,
+    TextInput,
     TextInputProps,
     TouchableOpacity,
-} from 'react-native';
-import { useThemeColors } from '@/hooks/useThemeColors';
-import { Spacing } from '@/constants/Spacing';
-import { Typography } from '@/constants/Typography';
+    View,
+    ViewStyle,
+} from "react-native";
+import { FontFamily, Typography } from "@/constants/Typography";
+import { Spacing } from "@/constants/Spacing";
+import { useThemeColors } from "@/hooks/useThemeColors";
 
 interface InputProps extends TextInputProps {
     label?: string;
     error?: string;
     leftIcon?: React.ReactNode;
     rightIcon?: React.ReactNode;
-    containerStyle?: any;
+    containerStyle?: ViewStyle;
 }
 
 export default function Input({
@@ -33,14 +34,18 @@ export default function Input({
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
     const [isFocused, setIsFocused] = useState(false);
 
-    const togglePasswordVisibility = () => {
-        setIsPasswordVisible(!isPasswordVisible);
-    };
+    const togglePasswordVisibility = () => setIsPasswordVisible((v) => !v);
+
+    const borderColor = error
+        ? colors.danger600
+        : isFocused
+        ? colors.brand800
+        : colors.ink300;
 
     return (
         <View style={[styles.container, containerStyle]}>
             {label && (
-                <Text style={[styles.label, { color: colors.textPrimary }]}>
+                <Text style={[styles.label, { color: colors.ink600 }]}>
                     {label}
                 </Text>
             )}
@@ -49,24 +54,17 @@ export default function Input({
                 style={[
                     styles.inputContainer,
                     {
-                        backgroundColor: colors.surface,
-                        borderColor: error
-                            ? colors.error
-                            : isFocused
-                            ? colors.primary
-                            : colors.border,
+                        backgroundColor: colors.paper,
+                        borderColor,
+                        borderWidth: isFocused && !error ? 1.5 : StyleSheet.hairlineWidth,
                     },
                 ]}
             >
                 {leftIcon && <View style={styles.leftIcon}>{leftIcon}</View>}
 
                 <TextInput
-                    style={[
-                        styles.input,
-                        { color: colors.textPrimary },
-                        style,
-                    ]}
-                    placeholderTextColor={colors.textDisabled}
+                    style={[styles.input, { color: colors.ink800 }, style]}
+                    placeholderTextColor={colors.ink400}
                     secureTextEntry={secureTextEntry && !isPasswordVisible}
                     onFocus={() => setIsFocused(true)}
                     onBlur={() => setIsFocused(false)}
@@ -77,9 +75,10 @@ export default function Input({
                     <TouchableOpacity
                         onPress={togglePasswordVisibility}
                         style={styles.rightIcon}
+                        hitSlop={8}
                     >
-                        <Text style={{ color: colors.textSecondary }}>
-                            {isPasswordVisible ? '👁️' : '👁️‍🗨️'}
+                        <Text style={{ color: colors.ink500, fontSize: 16 }}>
+                            {isPasswordVisible ? "👁" : "👁‍🗨"}
                         </Text>
                     </TouchableOpacity>
                 )}
@@ -90,9 +89,7 @@ export default function Input({
             </View>
 
             {error && (
-                <Text style={[styles.error, { color: colors.error }]}>
-                    {error}
-                </Text>
+                <Text style={[styles.error, { color: colors.danger600 }]}>{error}</Text>
             )}
         </View>
     );
@@ -103,21 +100,21 @@ const styles = StyleSheet.create({
         marginBottom: Spacing.md,
     },
     label: {
-        fontSize: Typography.fontSize.sm,
-        fontWeight: Typography.fontWeight.medium,
-        marginBottom: Spacing.xs,
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.tiny,
+        marginBottom: 6,
     },
     inputContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderRadius: Spacing.borderRadius.lg,
-        paddingHorizontal: Spacing.md,
+        flexDirection: "row",
+        alignItems: "center",
+        borderRadius: 10,
+        paddingHorizontal: 14,
     },
     input: {
         flex: 1,
-        paddingVertical: Spacing.md,
-        fontSize: Typography.fontSize.md,
+        paddingVertical: 12,
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.sm,
     },
     leftIcon: {
         marginRight: Spacing.sm,
@@ -127,6 +124,7 @@ const styles = StyleSheet.create({
         padding: Spacing.xs,
     },
     error: {
+        fontFamily: FontFamily.uiMedium,
         fontSize: Typography.fontSize.xs,
         marginTop: Spacing.xs,
     },
