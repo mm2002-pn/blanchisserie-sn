@@ -1,73 +1,84 @@
-import React, { useState, useEffect } from 'react';
+import { Fragment, useMemo, useState } from "react";
 import {
-    View,
-    Text,
-    StyleSheet,
-    ScrollView,
-    TouchableOpacity,
     Alert,
-    SafeAreaView,
-} from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useThemeColors } from '@/hooks/useThemeColors';
-import { useOrder } from '@/contexts/OrderContext';
-import Card from '@/components/ui/Card';
-import ThemedText from '@/components/ui/ThemedText';
-import Button from '@/components/ui/Button';
-import { Spacing } from '@/constants/Spacing';
-import { Order, OrderStatus, ServiceType } from '@/types/order.types';
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import Svg, { Circle, Line, Rect } from "react-native-svg";
 
-const SERVICES_MAP: Record<ServiceType, { label: string; icon: string }> = {
-    dry_wash: { label: 'Nettoyage à sec', icon: '👔' },
-    washing_folding: { label: 'Lavage et pliage', icon: '🧺' },
-    ironing: { label: 'Repassage', icon: '👕' },
-    household_items: { label: 'Articles ménagers', icon: '🧹' },
-    socks_cleaning: { label: 'Nettoyage chaussettes', icon: '🧦' },
+import Card from "@/components/ui/Card";
+import Icon from "@/components/ui/Icon";
+import StatusBadge, { OrderStatus as UIStatus } from "@/components/ui/StatusBadge";
+import ThemedText from "@/components/ui/ThemedText";
+import { FontFamily, Typography } from "@/constants/Typography";
+import { useOrder } from "@/contexts/OrderContext";
+import { useThemeColors } from "@/hooks/useThemeColors";
+import type { LinenType, Order, OrderStatus } from "@/types/order.types";
+
+const STATUS_TO_UI: Record<OrderStatus, UIStatus> = {
+    pending: "En attente",
+    confirmed: "Créée",
+    collected: "Collectée",
+    in_progress: "Traitement",
+    ready: "Prête",
+    delivered: "Livrée",
+    cancelled: "Annulée",
 };
 
-const STATUS_CONFIG: Record<OrderStatus, { label: string; icon: string; color: string }> = {
-    pending: { label: 'En attente', icon: '⏳', color: '#FFA500' },
-    confirmed: { label: 'Confirmée', icon: '✅', color: '#4CAF50' },
-    collected: { label: 'Collectée', icon: '📦', color: '#2196F3' },
-    in_progress: { label: 'En traitement', icon: '🔄', color: '#9C27B0' },
-    ready: { label: 'Prête', icon: '✨', color: '#00BCD4' },
-    delivered: { label: 'Livrée', icon: '🎉', color: '#4CAF50' },
-    cancelled: { label: 'Annulée', icon: '❌', color: '#F44336' },
-};
-
-// Workflow détaillé de production (7 étapes)
-const WORKFLOW_STEPS = [
-    { id: 'pending', label: 'En attente', icon: '⏳', description: 'Commande créée' },
-    { id: 'confirmed', label: 'Confirmée', icon: '✅', description: 'Commande confirmée' },
-    { id: 'collected', label: 'Collectée', icon: '📦', description: 'Linge collecté' },
-    { id: 'weighed', label: 'Pesée', icon: '⚖️', description: 'Pesée par type' },
-    { id: 'verified', label: 'Vérification', icon: '✂️', description: 'Tri vérifié' },
-    { id: 'washing', label: 'Lavage', icon: '💧', description: 'En cours de lavage' },
-    { id: 'drying', label: 'Séchage', icon: '🌬️', description: 'En cours de séchage' },
-    { id: 'ironing', label: 'Calandrage', icon: '✨', description: 'Repassage/finition' },
-    { id: 'ready', label: 'Prête', icon: '🎁', description: 'Prête pour livraison' },
-    { id: 'delivered', label: 'Livrée', icon: '🎉', description: 'Livrée au client' },
+const TIMELINE: { key: OrderStatus; label: string }[] = [
+    { key: "confirmed", label: "Créée" },
+    { key: "collected", label: "Collectée" },
+    { key: "in_progress", label: "En traitement" },
+    { key: "ready", label: "Prête" },
+    { key: "delivered", label: "Livrée" },
 ];
 
-// Mapping des statuts actuels vers les étapes du workflow
-const STATUS_TO_WORKFLOW_STEP: Record<OrderStatus, string> = {
-    pending: 'pending',
-    confirmed: 'confirmed',
-    collected: 'collected',
-    in_progress: 'washing', // Par défaut, "en traitement" = en lavage
-    ready: 'ready',
-    delivered: 'delivered',
-    cancelled: 'cancelled',
+const LINEN_LABELS: Record<LinenType, string> = {
+    drap: "Draps",
+    taie: "Taies d'oreiller",
+    serviette: "Serviettes",
+    nappe: "Nappes",
+    torchon: "Torchons",
+    rideau: "Rideaux",
+    couverture: "Couvertures",
+    housse: "Housses de couette",
+    peignoir: "Peignoirs",
+    tapis: "Tapis",
 };
 
-const TIMELINE_STEPS: { status: OrderStatus; label: string }[] = [
-    { status: 'pending', label: 'En attente' },
-    { status: 'confirmed', label: 'Confirmée' },
-    { status: 'collected', label: 'Collectée' },
-    { status: 'in_progress', label: 'En traitement' },
-    { status: 'ready', label: 'Prête' },
-    { status: 'delivered', label: 'Livrée' },
-];
+const LINEN_WEIGHT: Record<LinenType, number> = {
+    drap: 0.9,
+    taie: 0.2,
+    serviette: 0.6,
+    nappe: 0.8,
+    torchon: 0.2,
+    rideau: 1.2,
+    couverture: 1.8,
+    housse: 1.0,
+    peignoir: 0.5,
+    tapis: 3.5,
+};
+
+function formatDateTime(iso: string) {
+    const d = new Date(iso);
+    return (
+        d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) +
+        " · " +
+        d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+    );
+}
+
+function frNumber(n: number, frac = 1) {
+    return n
+        .toFixed(frac)
+        .replace(".", ",")
+        .replace(/,0$/, "");
+}
 
 export default function OrderDetailsScreen() {
     const router = useRouter();
@@ -75,516 +86,750 @@ export default function OrderDetailsScreen() {
     const params = useLocalSearchParams();
     const { getOrderById, cancelOrder, isLoading } = useOrder();
 
-    const [order, setOrder] = useState<Order | null>(null);
+    const orderId = params.id as string;
+    const order = useMemo<Order | null>(
+        () => (orderId ? getOrderById(orderId) ?? null : null),
+        [orderId, getOrderById],
+    );
     const [cancelling, setCancelling] = useState(false);
-
-    useEffect(() => {
-        const orderId = params.id as string;
-        if (orderId) {
-            const foundOrder = getOrderById(orderId);
-            setOrder(foundOrder || null);
-        }
-    }, [params.id]);
 
     if (!order) {
         return (
-            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-                <View style={styles.centerContent}>
-                    <Text style={{ fontSize: 48 }}>📦</Text>
-                    <ThemedText variate="subtitle1" color="textSecondary" style={{ marginTop: 16 }}>
-                        Commande non trouvée
+            <SafeAreaView
+                edges={["top"]}
+                style={[styles.container, { backgroundColor: colors.paper2 }]}
+            >
+                <View style={styles.emptyState}>
+                    <Icon name="package" size={48} color={colors.ink300} stroke={1.2} />
+                    <ThemedText variate="subtitle" color="ink500" style={{ marginTop: 12 }}>
+                        Commande introuvable
                     </ThemedText>
-                    <Button
-                        title="Retour"
+                    <Pressable
                         onPress={() => router.back()}
-                        variant="outline"
-                        style={{ marginTop: 24 }}
-                    />
+                        style={[styles.backButton, { backgroundColor: colors.brand800 }]}
+                    >
+                        <Text style={[styles.backButtonText, { color: colors.paper }]}>
+                            Retour
+                        </Text>
+                    </Pressable>
                 </View>
             </SafeAreaView>
         );
     }
 
-    const statusConfig = STATUS_CONFIG[order.status];
-    const currentStepIndex = TIMELINE_STEPS.findIndex(step => step.status === order.status);
+    const currentIndex = TIMELINE.findIndex((s) => s.key === order.status);
+    const items = order.services.flatMap((s) => s.items ?? []);
+    const totalPieces = items.reduce((sum, i) => sum + i.quantity, 0);
+    const estimatedWeight = items.reduce(
+        (sum, i) => sum + i.quantity * (LINEN_WEIGHT[i.type] ?? 0.4),
+        0,
+    );
+    const actualWeight = order.actualWeight;
+    const diffPct =
+        actualWeight && estimatedWeight > 0
+            ? ((actualWeight - estimatedWeight) / estimatedWeight) * 100
+            : 0;
 
-    const handleCancel = () => {
+    const canCancel = ["pending", "confirmed"].includes(order.status);
+    const canModify = order.status === "pending";
+
+    const handleCancel = () =>
         Alert.alert(
-            'Annuler la commande',
-            'Êtes-vous sûr de vouloir annuler cette commande ? Cette action est irréversible.',
+            "Annuler la commande",
+            "Cette action est irréversible. Continuer ?",
             [
-                { text: 'Non', style: 'cancel' },
+                { text: "Non", style: "cancel" },
                 {
-                    text: 'Oui, annuler',
-                    style: 'destructive',
+                    text: "Oui, annuler",
+                    style: "destructive",
                     onPress: async () => {
                         try {
                             setCancelling(true);
                             await cancelOrder(order.id);
-                            Alert.alert(
-                                'Commande annulée',
-                                'Votre commande a été annulée avec succès',
-                                [
-                                    {
-                                        text: 'OK',
-                                        onPress: () => router.back(),
-                                    },
-                                ]
-                            );
-                        } catch (error: any) {
-                            Alert.alert('Erreur', error.message || 'Impossible d\'annuler la commande');
+                            router.back();
+                        } catch {
+                            Alert.alert("Erreur", "Impossible d'annuler la commande");
                         } finally {
                             setCancelling(false);
                         }
                     },
                 },
-            ]
+            ],
         );
-    };
 
-    const handleModify = () => {
-        router.push({
-            pathname: '/(hotel)/new-order',
-            params: {
-                orderId: order.id,
-                // Pre-fill form with existing data
-            },
-        });
-    };
-
-    const formatDate = (isoDate: string) => {
-        const date = new Date(isoDate);
-        return date.toLocaleDateString('fr-FR', {
-            weekday: 'short',
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric',
-        });
-    };
-
-    const formatTime = (isoDate: string) => {
-        const date = new Date(isoDate);
-        return date.toLocaleTimeString('fr-FR', {
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-    };
-
-    const canCancel = ['pending', 'confirmed'].includes(order.status);
-    const canModify = order.status === 'pending';
+    const handleModify = () =>
+        router.push({ pathname: "/(hotel)/new-order", params: { orderId: order.id } });
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            <ScrollView
-                style={{ flex: 1 }}
-                contentContainerStyle={styles.content}
+        <SafeAreaView
+            edges={["top"]}
+            style={[styles.container, { backgroundColor: colors.paper2 }]}
+        >
+            {/* Top bar */}
+            <View
+                style={[
+                    styles.topBar,
+                    { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
+                ]}
             >
-                {/* Header */}
-                <View style={styles.header}>
-                    <TouchableOpacity
-                        onPress={() => router.back()}
-                        style={styles.backButton}
-                    >
-                        <Text style={{ fontSize: 24 }}>←</Text>
-                    </TouchableOpacity>
-                    <View style={{ flex: 1 }}>
-                        <ThemedText variate="headline" color="textPrimary">
-                            {order.orderNumber}
-                        </ThemedText>
-                        <ThemedText variate="body3" color="textSecondary" style={{ marginTop: 4 }}>
-                            Créée le {formatDate(order.createdAt)}
-                        </ThemedText>
-                    </View>
+                <Pressable
+                    onPress={() => router.back()}
+                    style={[styles.iconChip, { backgroundColor: colors.ink100 }]}
+                    hitSlop={6}
+                >
+                    <Icon name="chevLeft" size={16} color={colors.ink800} stroke={2} />
+                </Pressable>
+                <View style={{ flex: 1 }}>
+                    <ThemedText variate="title">{order.orderNumber}</ThemedText>
+                    <ThemedText variate="caption" color="ink500" style={{ marginTop: 2 }}>
+                        Créée le {formatDateTime(order.createdAt)}
+                    </ThemedText>
                 </View>
+                <Pressable
+                    style={[styles.iconChip, { backgroundColor: colors.ink100 }]}
+                    hitSlop={6}
+                >
+                    <Icon name="msg" size={16} color={colors.ink700} />
+                </Pressable>
+            </View>
 
-                {/* Status Badge */}
-                <Card style={{ backgroundColor: statusConfig.color + '15' }}>
-                    <View style={styles.statusHeader}>
-                        <Text style={styles.statusIcon}>{statusConfig.icon}</Text>
+            <ScrollView
+                contentContainerStyle={styles.content}
+                showsVerticalScrollIndicator={false}
+            >
+                {/* Status banner */}
+                <Card
+                    padding={14}
+                    style={[
+                        styles.statusBanner,
+                        {
+                            backgroundColor: colors.brand50,
+                            borderColor: colors.brand100,
+                        },
+                    ]}
+                >
+                    <View style={styles.statusBannerRow}>
                         <View style={{ flex: 1 }}>
-                            <ThemedText variate="subtitle1" color="textPrimary">
-                                {statusConfig.label}
-                            </ThemedText>
-                            <ThemedText variate="body3" color="textSecondary" style={{ marginTop: 4 }}>
-                                Dernière mise à jour: {formatDate(order.updatedAt)} à {formatTime(order.updatedAt)}
-                            </ThemedText>
+                            <Text style={[styles.caps, { color: colors.brand700 }]}>
+                                Étape actuelle
+                            </Text>
+                            <Text
+                                style={[styles.statusTitle, { color: colors.ink900 }]}
+                            >
+                                {STATUS_TO_UI[order.status]}
+                            </Text>
+                            {order.deliveryDate && (
+                                <Text
+                                    style={[styles.statusSub, { color: colors.ink600 }]}
+                                >
+                                    Livraison estimée · {formatDateTime(order.deliveryDate)}
+                                </Text>
+                            )}
                         </View>
+                        <StatusBadge status={STATUS_TO_UI[order.status]} />
                     </View>
                 </Card>
 
-                {/* Workflow de Production - Suivi détaillé */}
-                {order.status !== 'cancelled' && (
-                    <Card>
-                        <ThemedText variate="subtitle1" color="textPrimary" style={styles.sectionTitle}>
-                            Suivi détaillé de production
-                        </ThemedText>
-                        <ThemedText variate="caption" color="textSecondary" style={{ marginBottom: 16 }}>
-                            Suivez votre commande à travers toutes les étapes du processus
-                        </ThemedText>
-                        <View style={styles.timeline}>
-                            {WORKFLOW_STEPS.map((step, index) => {
-                                // Déterminer si l'étape est complétée en fonction du statut actuel
-                                const currentWorkflowStep = STATUS_TO_WORKFLOW_STEP[order.status];
-                                const currentStepIdx = WORKFLOW_STEPS.findIndex(s => s.id === currentWorkflowStep);
-                                const isCompleted = index <= currentStepIdx;
-                                const isCurrent = index === currentStepIdx;
+                {/* Progression */}
+                <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
+                    Progression
+                </ThemedText>
+                <Card padding={16} style={{ marginBottom: 14 }}>
+                    <View style={styles.timelineWrap}>
+                        {TIMELINE.map((step, i) => {
+                            const done = order.status !== "cancelled" && i < currentIndex;
+                            const active = order.status !== "cancelled" && i === currentIndex;
+                            const dotColor = active
+                                ? colors.brand800
+                                : done
+                                ? colors.brand700
+                                : colors.paper;
+                            const borderColor =
+                                done || active ? colors.brand800 : colors.ink300;
+                            const lineColor = done ? colors.brand700 : colors.ink200;
 
-                                return (
-                                    <View key={step.id} style={styles.timelineItem}>
-                                        <View style={styles.timelineLeft}>
+                            return (
+                                <View key={step.key} style={styles.timelineRow}>
+                                    <View style={styles.timelineCol}>
+                                        <View
+                                            style={[
+                                                styles.timelineDot,
+                                                {
+                                                    backgroundColor: dotColor,
+                                                    borderColor,
+                                                },
+                                                active && {
+                                                    shadowColor: colors.brand100,
+                                                    shadowOffset: { width: 0, height: 0 },
+                                                    shadowRadius: 4,
+                                                    shadowOpacity: 1,
+                                                    elevation: 2,
+                                                },
+                                            ]}
+                                        />
+                                        {i < TIMELINE.length - 1 && (
                                             <View
                                                 style={[
-                                                    styles.workflowDot,
-                                                    {
-                                                        backgroundColor: isCompleted
-                                                            ? (isCurrent ? colors.hotelPrimary : '#4CAF50')
-                                                            : colors.border,
-                                                        borderWidth: isCurrent ? 3 : 0,
-                                                        borderColor: isCurrent ? colors.hotelPrimary : 'transparent',
-                                                    },
+                                                    styles.timelineLine,
+                                                    { backgroundColor: lineColor },
+                                                ]}
+                                            />
+                                        )}
+                                    </View>
+                                    <View style={styles.timelineBody}>
+                                        <Text
+                                            style={[
+                                                styles.timelineLabel,
+                                                {
+                                                    color:
+                                                        done || active
+                                                            ? colors.ink900
+                                                            : colors.ink500,
+                                                    fontFamily: active
+                                                        ? FontFamily.uiSemibold
+                                                        : FontFamily.uiMedium,
+                                                },
+                                            ]}
+                                        >
+                                            {step.label}
+                                        </Text>
+                                        {(done || active) && (
+                                            <Text
+                                                style={[
+                                                    styles.timelineMeta,
+                                                    { color: colors.ink500 },
                                                 ]}
                                             >
-                                                <Text style={styles.workflowIcon}>
-                                                    {isCompleted ? (isCurrent ? step.icon : '✓') : step.icon}
-                                                </Text>
-                                            </View>
-                                            {index < WORKFLOW_STEPS.length - 1 && (
-                                                <View
-                                                    style={[
-                                                        styles.timelineLine,
-                                                        {
-                                                            backgroundColor: isCompleted && !isCurrent
-                                                                ? '#4CAF50'
-                                                                : colors.border,
-                                                        },
-                                                    ]}
-                                                />
-                                            )}
-                                        </View>
-                                        <View style={[styles.timelineRight, { opacity: isCompleted ? 1 : 0.5 }]}>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                                <ThemedText
-                                                    variate="body2"
-                                                    color={isCompleted ? 'textPrimary' : 'textSecondary'}
-                                                    style={{ fontWeight: isCurrent ? 'bold' : 'normal' }}
-                                                >
-                                                    {step.label}
-                                                </ThemedText>
-                                                {isCurrent && (
-                                                    <View style={{
-                                                        backgroundColor: colors.hotelPrimary,
-                                                        paddingHorizontal: 8,
-                                                        paddingVertical: 2,
-                                                        borderRadius: 12,
-                                                    }}>
-                                                        <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>
-                                                            EN COURS
-                                                        </Text>
-                                                    </View>
-                                                )}
-                                                {isCompleted && !isCurrent && (
-                                                    <Text style={{ fontSize: 16 }}>✅</Text>
-                                                )}
-                                            </View>
-                                            <ThemedText
-                                                variate="caption"
-                                                color={isCompleted ? 'textSecondary' : 'textTertiary'}
-                                                style={{ marginTop: 2 }}
-                                            >
-                                                {step.description}
-                                            </ThemedText>
-                                        </View>
+                                                {active
+                                                    ? "En cours"
+                                                    : formatDateTime(order.updatedAt)}
+                                            </Text>
+                                        )}
                                     </View>
-                                );
-                            })}
-                        </View>
-                    </Card>
-                )}
-
-                {/* Services */}
-                <Card>
-                    <ThemedText variate="subtitle1" color="textPrimary" style={styles.sectionTitle}>
-                        Services
-                    </ThemedText>
-                    <View style={styles.servicesList}>
-                        {order.services.map((serviceId, index) => {
-                            const service = SERVICES_MAP[serviceId];
-                            return (
-                                <View key={index} style={styles.serviceItem}>
-                                    <Text style={styles.serviceIcon}>{service.icon}</Text>
-                                    <ThemedText variate="body2" color="textPrimary">
-                                        {service.label}
-                                    </ThemedText>
                                 </View>
                             );
                         })}
                     </View>
                 </Card>
 
-                {/* Volume & Weight */}
-                <Card>
-                    <ThemedText variate="subtitle1" color="textPrimary" style={styles.sectionTitle}>
-                        Volume et poids
-                    </ThemedText>
-                    <View style={styles.infoRow}>
-                        <View style={styles.infoItem}>
-                            <ThemedText variate="body3" color="textSecondary">
-                                Volume
-                            </ThemedText>
-                            <ThemedText variate="headline" color="textPrimary" style={{ marginTop: 8 }}>
-                                {order.volume}
-                            </ThemedText>
+                {/* Weight comparator */}
+                <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
+                    Poids estimé vs réel
+                </ThemedText>
+                <Card padding={16} style={{ marginBottom: 14 }}>
+                    <View style={styles.weightHead}>
+                        <View>
+                            <Text style={[styles.weightCaption, { color: colors.ink500 }]}>
+                                Estimé à la collecte
+                            </Text>
+                            <Text
+                                style={[styles.weightValue, { color: colors.ink900 }]}
+                            >
+                                {frNumber(estimatedWeight)} kg
+                            </Text>
                         </View>
-                        <View style={[styles.infoItem, styles.infoItemBorder, { borderLeftColor: colors.border }]}>
-                            <ThemedText variate="body3" color="textSecondary">
-                                Poids estimé
-                            </ThemedText>
-                            <ThemedText variate="headline" color="textPrimary" style={{ marginTop: 8 }}>
-                                {order.estimatedWeight} kg
-                            </ThemedText>
+                        <View style={{ alignItems: "flex-end" }}>
+                            <Text style={[styles.weightCaption, { color: colors.ink500 }]}>
+                                Pesée réelle · atelier
+                            </Text>
+                            <Text
+                                style={[styles.weightValue, { color: colors.ink900 }]}
+                            >
+                                {actualWeight ? `${frNumber(actualWeight)} kg` : "—"}
+                            </Text>
                         </View>
-                        {order.actualWeight && (
-                            <View style={[styles.infoItem, styles.infoItemBorder, { borderLeftColor: colors.border }]}>
-                                <ThemedText variate="body3" color="textSecondary">
-                                    Poids réel
-                                </ThemedText>
-                                <ThemedText variate="headline" color="hotelPrimary" style={{ marginTop: 8 }}>
-                                    {order.actualWeight} kg
-                                </ThemedText>
-                            </View>
-                        )}
                     </View>
+
+                    <Svg
+                        width="100%"
+                        height={26}
+                        viewBox="0 0 300 26"
+                        preserveAspectRatio="none"
+                    >
+                        <Rect x={0} y={11} width={300} height={3} rx={1.5} fill={colors.ink200} />
+                        <Rect x={150} y={5} width={1} height={15} fill={colors.ink400} />
+                        {actualWeight ? (
+                            <>
+                                <Line
+                                    x1={150}
+                                    y1={12.5}
+                                    x2={150 + Math.max(Math.min(diffPct * 2, 120), -120)}
+                                    y2={12.5}
+                                    stroke={Math.abs(diffPct) > 5 ? colors.warn600 : colors.ok600}
+                                    strokeWidth={3}
+                                />
+                                <Circle
+                                    cx={150}
+                                    cy={12.5}
+                                    r={4.5}
+                                    fill={colors.paper}
+                                    stroke={colors.ink700}
+                                    strokeWidth={1.5}
+                                />
+                                <Circle
+                                    cx={150 + Math.max(Math.min(diffPct * 2, 120), -120)}
+                                    cy={12.5}
+                                    r={5}
+                                    fill={Math.abs(diffPct) > 5 ? colors.warn600 : colors.ok600}
+                                />
+                            </>
+                        ) : (
+                            <Circle
+                                cx={150}
+                                cy={12.5}
+                                r={4.5}
+                                fill={colors.paper}
+                                stroke={colors.ink400}
+                                strokeWidth={1.5}
+                            />
+                        )}
+                    </Svg>
+
+                    <View style={styles.weightScale}>
+                        <Text style={[styles.weightScaleText, { color: colors.ink500 }]}>
+                            −10%
+                        </Text>
+                        {actualWeight ? (
+                            <Text
+                                style={[
+                                    styles.weightScaleDiff,
+                                    {
+                                        color:
+                                            Math.abs(diffPct) > 5
+                                                ? colors.warn700
+                                                : colors.ok700,
+                                    },
+                                ]}
+                            >
+                                Écart {diffPct >= 0 ? "+" : ""}
+                                {frNumber(diffPct, 1)}%
+                            </Text>
+                        ) : (
+                            <Text
+                                style={[styles.weightScaleDiff, { color: colors.ink500 }]}
+                            >
+                                En attente de pesée
+                            </Text>
+                        )}
+                        <Text style={[styles.weightScaleText, { color: colors.ink500 }]}>
+                            +10%
+                        </Text>
+                    </View>
+
+                    {actualWeight && Math.abs(diffPct) > 5 && (
+                        <View
+                            style={[
+                                styles.weightNote,
+                                { backgroundColor: colors.warn100 },
+                            ]}
+                        >
+                            <Text style={[styles.weightNoteText, { color: colors.ink700 }]}>
+                                L'écart dépasse la tolérance contractuelle (±5%). La facture
+                                sera établie sur le poids réel.
+                            </Text>
+                        </View>
+                    )}
                 </Card>
 
-                {/* Dates */}
-                <Card>
-                    <ThemedText variate="subtitle1" color="textPrimary" style={styles.sectionTitle}>
-                        Dates importantes
-                    </ThemedText>
-                    <View style={styles.dateItem}>
-                        <Text style={styles.dateIcon}>📅</Text>
-                        <View style={{ flex: 1 }}>
-                            <ThemedText variate="body3" color="textSecondary">
-                                Date de collecte
-                            </ThemedText>
-                            <ThemedText variate="body1" color="textPrimary" style={{ marginTop: 4 }}>
-                                {formatDate(order.collectionDate)} à {formatTime(order.collectionDate)}
-                            </ThemedText>
-                        </View>
+                {/* Articles */}
+                <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
+                    Articles · {totalPieces} pièces
+                </ThemedText>
+                <Card padding={0} style={{ marginBottom: 14 }}>
+                    {items.length === 0 ? (
+                        <Text
+                            style={{
+                                padding: 14,
+                                fontFamily: FontFamily.uiRegular,
+                                fontSize: Typography.fontSize.xs,
+                                color: colors.ink500,
+                            }}
+                        >
+                            Aucun article détaillé
+                        </Text>
+                    ) : (
+                        items.map((it, i) => (
+                            <Fragment key={`${it.type}-${i}`}>
+                                <View style={styles.articleRow}>
+                                    <Text
+                                        style={[
+                                            styles.articleLabel,
+                                            { color: colors.ink900 },
+                                        ]}
+                                    >
+                                        {LINEN_LABELS[it.type]}
+                                    </Text>
+                                    <View style={styles.articleMeta}>
+                                        <Text
+                                            style={[styles.articleQty, { color: colors.ink500 }]}
+                                        >
+                                            ×{it.quantity}
+                                        </Text>
+                                        <Text
+                                            style={[styles.articleKg, { color: colors.ink900 }]}
+                                        >
+                                            {frNumber(it.quantity * (LINEN_WEIGHT[it.type] ?? 0.4))} kg
+                                        </Text>
+                                    </View>
+                                </View>
+                                {i < items.length - 1 && (
+                                    <View
+                                        style={[
+                                            styles.articleDivider,
+                                            { backgroundColor: colors.ink200 },
+                                        ]}
+                                    />
+                                )}
+                            </Fragment>
+                        ))
+                    )}
+                </Card>
+
+                {/* Hotel + dates */}
+                <Card padding={14} style={{ marginBottom: 14 }}>
+                    <View style={styles.kv}>
+                        <Text style={[styles.kvLabel, { color: colors.ink500 }]}>
+                            Établissement
+                        </Text>
+                        <Text style={[styles.kvValue, { color: colors.ink900 }]}>
+                            {order.hotelName}
+                        </Text>
+                    </View>
+                    <View style={[styles.kvDivider, { backgroundColor: colors.ink200 }]} />
+                    <View style={styles.kv}>
+                        <Text style={[styles.kvLabel, { color: colors.ink500 }]}>
+                            Collecte
+                        </Text>
+                        <Text style={[styles.kvValue, { color: colors.ink900 }]}>
+                            {formatDateTime(order.collectionDate)}
+                        </Text>
                     </View>
                     {order.deliveryDate && (
-                        <View style={[styles.dateItem, { marginTop: 12 }]}>
-                            <Text style={styles.dateIcon}>🚚</Text>
-                            <View style={{ flex: 1 }}>
-                                <ThemedText variate="body3" color="textSecondary">
-                                    Date de livraison
-                                </ThemedText>
-                                <ThemedText variate="body1" color="textPrimary" style={{ marginTop: 4 }}>
-                                    {formatDate(order.deliveryDate)} à {formatTime(order.deliveryDate)}
-                                </ThemedText>
+                        <>
+                            <View style={[styles.kvDivider, { backgroundColor: colors.ink200 }]} />
+                            <View style={styles.kv}>
+                                <Text style={[styles.kvLabel, { color: colors.ink500 }]}>
+                                    Livraison
+                                </Text>
+                                <Text style={[styles.kvValue, { color: colors.ink900 }]}>
+                                    {formatDateTime(order.deliveryDate)}
+                                </Text>
                             </View>
-                        </View>
+                        </>
                     )}
                 </Card>
 
                 {/* Instructions */}
-                {order.instructions && (
-                    <Card>
-                        <ThemedText variate="subtitle1" color="textPrimary" style={styles.sectionTitle}>
-                            Instructions spéciales
-                        </ThemedText>
-                        <View style={[styles.instructionsBox, { backgroundColor: colors.surface }]}>
-                            <ThemedText variate="body2" color="textSecondary">
-                                {order.instructions}
-                            </ThemedText>
-                        </View>
-                    </Card>
-                )}
-
-                {/* Photos */}
-                {order.photos && order.photos.length > 0 && (
-                    <Card>
-                        <ThemedText variate="subtitle1" color="textPrimary" style={styles.sectionTitle}>
-                            Photos jointes
-                        </ThemedText>
-                        <ThemedText variate="body3" color="textSecondary">
-                            {order.photos.length} photo(s)
-                        </ThemedText>
-                    </Card>
-                )}
-
-                {/* Hotel Info */}
-                <Card>
-                    <ThemedText variate="subtitle1" color="textPrimary" style={styles.sectionTitle}>
-                        Informations client
-                    </ThemedText>
-                    <View style={styles.hotelInfo}>
-                        <Text style={styles.hotelIcon}>🏨</Text>
-                        <ThemedText variate="body1" color="textPrimary">
-                            {order.hotelName}
-                        </ThemedText>
-                    </View>
-                </Card>
-            </ScrollView>
-
-            {/* Action Buttons */}
-            {(canCancel || canModify) && (
-                <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
-                    {canModify && (
-                        <Button
-                            title="Modifier"
-                            onPress={handleModify}
-                            variant="outline"
-                            style={{ flex: 1, marginRight: canCancel ? 8 : 0 }}
-                        />
-                    )}
-                    {canCancel && (
-                        <Button
-                            title={cancelling ? "Annulation..." : "Annuler la commande"}
-                            onPress={handleCancel}
-                            variant="outline"
-                            disabled={cancelling || isLoading}
+                {order.instructions ? (
+                    <Card padding={14} style={{ marginBottom: 14 }}>
+                        <Text style={[styles.caps, { color: colors.ink500, marginBottom: 6 }]}>
+                            Instructions
+                        </Text>
+                        <Text
                             style={{
-                                flex: 1,
-                                marginLeft: canModify ? 8 : 0,
-                                borderColor: '#F44336',
+                                fontFamily: FontFamily.uiRegular,
+                                fontSize: Typography.fontSize.sm,
+                                color: colors.ink800,
+                                lineHeight: 20,
                             }}
-                        />
-                    )}
+                        >
+                            {order.instructions}
+                        </Text>
+                    </Card>
+                ) : null}
+
+                {/* Actions */}
+                <View style={styles.actions}>
+                    <Pressable
+                        style={[
+                            styles.actionBtn,
+                            {
+                                backgroundColor: colors.paper,
+                                borderColor: colors.ink200,
+                                borderWidth: StyleSheet.hairlineWidth,
+                            },
+                        ]}
+                    >
+                        <Text style={[styles.actionBtnText, { color: colors.ink800 }]}>
+                            Voir photos
+                            {order.photos?.length ? ` (${order.photos.length})` : ""}
+                        </Text>
+                    </Pressable>
+                    <Pressable
+                        style={[styles.actionBtn, { backgroundColor: colors.danger100 }]}
+                    >
+                        <Text style={[styles.actionBtnText, { color: colors.danger600 }]}>
+                            Ouvrir réclamation
+                        </Text>
+                    </Pressable>
                 </View>
-            )}
+
+                {/* Modify / Cancel */}
+                {(canModify || canCancel) && (
+                    <View style={[styles.actions, { marginTop: 10 }]}>
+                        {canModify && (
+                            <Pressable
+                                onPress={handleModify}
+                                style={[
+                                    styles.actionBtn,
+                                    {
+                                        backgroundColor: colors.brand100,
+                                    },
+                                ]}
+                            >
+                                <Text
+                                    style={[styles.actionBtnText, { color: colors.brand800 }]}
+                                >
+                                    Modifier
+                                </Text>
+                            </Pressable>
+                        )}
+                        {canCancel && (
+                            <Pressable
+                                onPress={handleCancel}
+                                disabled={cancelling || isLoading}
+                                style={[
+                                    styles.actionBtn,
+                                    {
+                                        backgroundColor: colors.paper,
+                                        borderColor: colors.danger600,
+                                        borderWidth: StyleSheet.hairlineWidth,
+                                        opacity: cancelling ? 0.6 : 1,
+                                    },
+                                ]}
+                            >
+                                <Text
+                                    style={[styles.actionBtnText, { color: colors.danger600 }]}
+                                >
+                                    {cancelling ? "Annulation…" : "Annuler la commande"}
+                                </Text>
+                            </Pressable>
+                        )}
+                    </View>
+                )}
+            </ScrollView>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
+    container: { flex: 1 },
+
+    topBar: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
     },
+    iconChip: {
+        width: 34,
+        height: 34,
+        borderRadius: 99,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+
     content: {
-        padding: Spacing.md,
-        paddingBottom: 100,
+        padding: 16,
+        paddingBottom: 120,
     },
-    centerContent: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: Spacing.xl,
+
+    // Status banner
+    statusBanner: {
+        marginBottom: 14,
     },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: Spacing.lg,
+    statusBannerRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: 10,
     },
-    backButton: {
-        width: 40,
-        height: 40,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: Spacing.md,
+    caps: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.micro,
+        letterSpacing: Typography.letterSpacing.wide,
+        textTransform: "uppercase",
     },
-    statusHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.md,
+    statusTitle: {
+        fontFamily: FontFamily.serifMedium,
+        fontSize: 22,
+        marginTop: 2,
+        letterSpacing: -0.3,
     },
-    statusIcon: {
-        fontSize: 32,
+    statusSub: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 4,
     },
-    sectionTitle: {
-        marginBottom: Spacing.md,
+
+    sectionLabel: {
+        marginBottom: 10,
+        paddingLeft: 2,
     },
-    timeline: {
-        paddingLeft: 4,
+
+    // Timeline
+    timelineWrap: {
+        paddingLeft: 6,
     },
-    timelineItem: {
-        flexDirection: 'row',
-        minHeight: 60,
+    timelineRow: {
+        flexDirection: "row",
+        minHeight: 44,
     },
-    timelineLeft: {
-        alignItems: 'center',
-        marginRight: Spacing.md,
+    timelineCol: {
+        width: 18,
+        alignItems: "center",
     },
     timelineDot: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        borderWidth: 3,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    timelineDotIcon: {
-        fontSize: 14,
-    },
-    workflowDot: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    workflowIcon: {
-        fontSize: 18,
+        width: 13,
+        height: 13,
+        borderRadius: 99,
+        borderWidth: 1.5,
+        marginTop: 2,
     },
     timelineLine: {
-        width: 2,
+        width: 1.5,
         flex: 1,
-        marginTop: 4,
-        marginBottom: 4,
+        marginVertical: 2,
     },
-    timelineRight: {
+    timelineBody: {
         flex: 1,
-        paddingTop: 6,
+        paddingLeft: 12,
+        paddingBottom: 14,
     },
-    servicesList: {
-        gap: Spacing.sm,
+    timelineLabel: {
+        fontSize: Typography.fontSize.sm,
     },
-    serviceItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-        paddingVertical: Spacing.sm,
+    timelineMeta: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 2,
     },
-    serviceIcon: {
-        fontSize: 24,
+
+    // Weight
+    weightHead: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "baseline",
+        marginBottom: 14,
     },
-    infoRow: {
-        flexDirection: 'row',
+    weightCaption: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
     },
-    infoItem: {
-        flex: 1,
+    weightValue: {
+        fontFamily: FontFamily.serifMedium,
+        fontSize: 26,
+        lineHeight: 28,
+        marginTop: 2,
     },
-    infoItemBorder: {
-        paddingLeft: Spacing.md,
-        borderLeftWidth: 1,
+    weightScale: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginTop: 6,
     },
-    dateItem: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: Spacing.md,
+    weightScaleText: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.micro,
     },
-    dateIcon: {
-        fontSize: 24,
+    weightScaleDiff: {
+        fontFamily: FontFamily.monoMedium,
+        fontSize: Typography.fontSize.xs,
     },
-    instructionsBox: {
-        padding: Spacing.md,
+    weightNote: {
+        marginTop: 10,
+        padding: 10,
         borderRadius: 8,
     },
-    hotelInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.md,
+    weightNoteText: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        lineHeight: 16,
     },
-    hotelIcon: {
-        fontSize: 32,
+
+    // Articles
+    articleRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: 14,
     },
-    footer: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        flexDirection: 'row',
-        padding: Spacing.md,
-        borderTopWidth: 1,
+    articleLabel: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.sm,
+    },
+    articleMeta: {
+        flexDirection: "row",
+        alignItems: "baseline",
+        gap: 16,
+    },
+    articleQty: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.xs,
+    },
+    articleKg: {
+        fontFamily: FontFamily.monoMedium,
+        fontSize: Typography.fontSize.sm,
+        minWidth: 58,
+        textAlign: "right",
+    },
+    articleDivider: {
+        height: StyleSheet.hairlineWidth,
+        marginHorizontal: 14,
+    },
+
+    // KV list
+    kv: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        paddingVertical: 8,
+    },
+    kvLabel: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.xs,
+    },
+    kvValue: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.sm,
+    },
+    kvDivider: {
+        height: StyleSheet.hairlineWidth,
+    },
+
+    // Actions
+    actions: {
+        flexDirection: "row",
+        gap: 8,
+    },
+    actionBtn: {
+        flex: 1,
+        padding: 12,
+        borderRadius: 10,
+        alignItems: "center",
+    },
+    actionBtnText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.xs,
+    },
+
+    // Empty
+    emptyState: {
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24,
+    },
+    backButton: {
+        marginTop: 24,
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 10,
+    },
+    backButtonText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
     },
 });
