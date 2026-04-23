@@ -1,306 +1,268 @@
-import React, { useState } from 'react';
+import { useMemo, useState } from "react";
 import {
-    View,
-    Text,
-    StyleSheet,
-    ScrollView,
-    TouchableOpacity,
-    FlatList,
     Alert,
-    SafeAreaView,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { useThemeColors } from '@/hooks/useThemeColors';
-import Card from '@/components/ui/Card';
-import ThemedText from '@/components/ui/ThemedText';
-import Button from '@/components/ui/Button';
-import { Spacing } from '@/constants/Spacing';
-import { Typography } from '@/constants/Typography';
-import { mockInvoices } from '@/data/mock-invoices';
-import { Invoice } from '@/types/invoice.types';
+    FlatList,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+import Card from "@/components/ui/Card";
+import Icon from "@/components/ui/Icon";
+import StatusBadge, { OrderStatus as UIStatus } from "@/components/ui/StatusBadge";
+import ThemedText from "@/components/ui/ThemedText";
+import { FontFamily, Typography } from "@/constants/Typography";
+import { mockInvoices } from "@/data/mock-invoices";
+import { useAuth } from "@/contexts/AuthContext";
+import { useThemeColors } from "@/hooks/useThemeColors";
+import type { Invoice, InvoiceStatus, PaymentMethod } from "@/types/invoice.types";
 
 const FILTERS = [
-    { id: 'all', label: 'Toutes' },
-    { id: 'pending', label: 'En attente' },
-    { id: 'paid', label: 'Payées' },
-];
+    { id: "all", label: "Toutes" },
+    { id: "pending", label: "En attente" },
+    { id: "overdue", label: "En retard" },
+    { id: "paid", label: "Payées" },
+] as const;
 
-const STATUS_COLORS = {
-    pending: '#FFA500',
-    paid: '#228B22',
-    overdue: '#DC143C',
+type FilterId = (typeof FILTERS)[number]["id"];
+
+const STATUS_TO_UI: Record<InvoiceStatus, UIStatus> = {
+    pending: "En attente",
+    paid: "Payée",
+    overdue: "En retard",
+    cancelled: "Annulée",
 };
 
-const STATUS_LABELS = {
-    pending: 'En attente',
-    paid: 'Payée',
-    overdue: 'En retard',
+const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+    card: "Carte bancaire",
+    transfer: "Virement",
+    cash: "Espèces",
+    cheque: "Chèque",
 };
 
-const PAYMENT_METHOD_LABELS = {
-    card: 'Carte bancaire',
-    transfer: 'Virement',
-    cash: 'Espèces',
-    mobile: 'Mobile Money',
-};
+function formatCFA(n: number) {
+    return n.toLocaleString("fr-FR").replace(/\s/g, " ");
+}
+
+function formatMonth(iso: string) {
+    const d = new Date(iso);
+    return d.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+}
+
+function formatDueShort(iso: string) {
+    return new Date(iso).toLocaleDateString("fr-FR", {
+        day: "numeric",
+        month: "short",
+    });
+}
+
+function resolveStatus(inv: Invoice): InvoiceStatus {
+    if (inv.status === "pending" && new Date(inv.dueDate) < new Date()) {
+        return "overdue";
+    }
+    return inv.status;
+}
 
 export default function InvoicesScreen() {
-    const router = useRouter();
     const colors = useThemeColors();
-    const [selectedFilter, setSelectedFilter] = useState('all');
+    const { user } = useAuth();
+    const [selected, setSelected] = useState<FilterId>("all");
 
-    // Filter invoices for current hotel (using hotelId '1' from mock data)
-    const hotelInvoices = mockInvoices.filter(invoice => invoice.hotelId === '1');
+    const hotelInvoices = useMemo(
+        () => mockInvoices.filter((i) => i.hotelId === (user?.id ?? "1")),
+        [user?.id],
+    );
 
-    const filteredInvoices = selectedFilter === 'all'
-        ? hotelInvoices
-        : hotelInvoices.filter(invoice => invoice.status === selectedFilter);
+    const outstanding = useMemo(
+        () =>
+            hotelInvoices
+                .filter((i) => resolveStatus(i) === "pending" || resolveStatus(i) === "overdue")
+                .reduce((sum, i) => sum + i.total, 0),
+        [hotelInvoices],
+    );
+    const pendingCount = hotelInvoices.filter((i) => i.status === "pending").length;
+    const overdueCount = hotelInvoices.filter((i) => resolveStatus(i) === "overdue").length;
 
-    const handlePayment = (invoice: Invoice) => {
+    const filtered = useMemo(() => {
+        if (selected === "all") return hotelInvoices;
+        return hotelInvoices.filter((i) => resolveStatus(i) === selected);
+    }, [hotelInvoices, selected]);
+
+    const handlePay = () => {
         Alert.alert(
-            'Paiement',
-            `Payer ${invoice.total.toLocaleString('fr-FR')} FCFA pour la facture ${invoice.invoiceNumber}?`,
+            "Paiement mobile money",
+            `Régler ${formatCFA(outstanding)} F CFA par Orange Money ou Wave ?`,
             [
-                {
-                    text: 'Annuler',
-                    style: 'cancel',
-                },
-                {
-                    text: 'Payer',
-                    onPress: () => {
-                        // TODO: Implement payment flow
-                        Alert.alert('Succès', 'Paiement effectué avec succès');
-                    },
-                },
-            ]
+                { text: "Annuler", style: "cancel" },
+                { text: "Orange Money", onPress: () => {} },
+                { text: "Wave", onPress: () => {} },
+            ],
         );
     };
-
-    const renderInvoiceCard = ({ item }: { item: Invoice }) => {
-        const isOverdue = item.status === 'pending' && new Date(item.dueDate) < new Date();
-        const displayStatus = isOverdue ? 'overdue' : item.status;
-
-        return (
-            <TouchableOpacity
-                onPress={() => {
-                    // TODO: Navigate to invoice details
-                }}
-            >
-                <Card style={styles.invoiceCard}>
-                    <View style={styles.invoiceHeader}>
-                        <View>
-                            <ThemedText variate="subtitle2" color="textPrimary">
-                                {item.invoiceNumber}
-                            </ThemedText>
-                            <ThemedText variate="caption" color="textSecondary">
-                                Commande: {item.orderNumber}
-                            </ThemedText>
-                            <ThemedText variate="caption" color="textSecondary">
-                                {new Date(item.createdAt).toLocaleDateString('fr-FR')}
-                            </ThemedText>
-                        </View>
-                        <View
-                            style={[
-                                styles.statusBadge,
-                                { backgroundColor: STATUS_COLORS[displayStatus] + '20' },
-                            ]}
-                        >
-                            <Text
-                                style={[
-                                    styles.statusText,
-                                    { color: STATUS_COLORS[displayStatus] },
-                                ]}
-                            >
-                                {STATUS_LABELS[displayStatus]}
-                            </Text>
-                        </View>
-                    </View>
-
-                    {/* Invoice Items */}
-                    <View style={styles.itemsContainer}>
-                        {item.items.map((lineItem, index) => (
-                            <View key={index} style={styles.itemRow}>
-                                <ThemedText variate="body3" color="textSecondary" style={{ flex: 1 }}>
-                                    {lineItem.description}
-                                </ThemedText>
-                                <ThemedText variate="body3" color="textPrimary">
-                                    {lineItem.total.toLocaleString('fr-FR')} FCFA
-                                </ThemedText>
-                            </View>
-                        ))}
-                    </View>
-
-                    {/* Totals */}
-                    <View style={styles.totalsContainer}>
-                        <View style={styles.totalRow}>
-                            <ThemedText variate="body3" color="textSecondary">
-                                Sous-total:
-                            </ThemedText>
-                            <ThemedText variate="body3" color="textPrimary">
-                                {item.subtotal.toLocaleString('fr-FR')} FCFA
-                            </ThemedText>
-                        </View>
-                        <View style={styles.totalRow}>
-                            <ThemedText variate="body3" color="textSecondary">
-                                TVA (18%):
-                            </ThemedText>
-                            <ThemedText variate="body3" color="textPrimary">
-                                {item.tax.toLocaleString('fr-FR')} FCFA
-                            </ThemedText>
-                        </View>
-                        <View style={[styles.totalRow, styles.grandTotalRow]}>
-                            <ThemedText variate="subtitle2" color="textPrimary">
-                                Total:
-                            </ThemedText>
-                            <ThemedText variate="subtitle2" color="textPrimary">
-                                {item.total.toLocaleString('fr-FR')} FCFA
-                            </ThemedText>
-                        </View>
-                    </View>
-
-                    {/* Due Date / Payment Info */}
-                    {item.status === 'pending' ? (
-                        <View style={styles.dueDateContainer}>
-                            <Text style={styles.dueDateIcon}>📅</Text>
-                            <ThemedText variate="caption" color="textSecondary">
-                                Date d'échéance: {new Date(item.dueDate).toLocaleDateString('fr-FR')}
-                            </ThemedText>
-                        </View>
-                    ) : (
-                        <View style={styles.paymentInfoContainer}>
-                            <View style={styles.paymentInfo}>
-                                <Text style={styles.paymentIcon}>✓</Text>
-                                <View>
-                                    <ThemedText variate="caption" color="textSecondary">
-                                        Payé le {new Date(item.paidDate!).toLocaleDateString('fr-FR')}
-                                    </ThemedText>
-                                    <ThemedText variate="caption" color="textSecondary">
-                                        {PAYMENT_METHOD_LABELS[item.paymentMethod!]}
-                                    </ThemedText>
-                                </View>
-                            </View>
-                        </View>
-                    )}
-
-                    {/* Payment Button */}
-                    {item.status === 'pending' && (
-                        <TouchableOpacity
-                            style={[
-                                styles.paymentButton,
-                                { backgroundColor: colors.hotelPrimary },
-                            ]}
-                            onPress={() => handlePayment(item)}
-                        >
-                            <Text style={styles.paymentButtonText}>💳 Payer maintenant</Text>
-                        </TouchableOpacity>
-                    )}
-                </Card>
-            </TouchableOpacity>
-        );
-    };
-
-    // Calculate summary stats
-    const totalPending = filteredInvoices
-        .filter(inv => inv.status === 'pending')
-        .reduce((sum, inv) => sum + inv.total, 0);
-
-    const totalPaid = filteredInvoices
-        .filter(inv => inv.status === 'paid')
-        .reduce((sum, inv) => sum + inv.total, 0);
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            {/* Header */}
-            <View style={styles.header}>
-                <ThemedText variate="headline" color="textPrimary">
-                    Mes Factures
+        <SafeAreaView
+            edges={["top"]}
+            style={[styles.container, { backgroundColor: colors.paper2 }]}
+        >
+            <View
+                style={[
+                    styles.header,
+                    { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
+                ]}
+            >
+                <ThemedText variate="title">Factures</ThemedText>
+                <ThemedText variate="caption" color="ink500" style={styles.headerSub}>
+                    {user?.name ?? "Votre espace pro"}
                 </ThemedText>
             </View>
 
-            {/* Summary Cards */}
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.summaryContainer}
-                contentContainerStyle={styles.summaryContent}
-            >
-                <Card style={styles.summaryCard}>
-                    <Text style={styles.summaryIcon}>⏳</Text>
-                    <ThemedText variate="caption" color="textSecondary">
-                        En attente
-                    </ThemedText>
-                    <ThemedText variate="subtitle1" color="textPrimary">
-                        {totalPending.toLocaleString('fr-FR')} FCFA
-                    </ThemedText>
-                </Card>
-
-                <Card style={styles.summaryCard}>
-                    <Text style={styles.summaryIcon}>✓</Text>
-                    <ThemedText variate="caption" color="textSecondary">
-                        Payées
-                    </ThemedText>
-                    <ThemedText variate="subtitle1" color="textPrimary">
-                        {totalPaid.toLocaleString('fr-FR')} FCFA
-                    </ThemedText>
-                </Card>
-
-                <Card style={styles.summaryCard}>
-                    <Text style={styles.summaryIcon}>📊</Text>
-                    <ThemedText variate="caption" color="textSecondary">
-                        Total factures
-                    </ThemedText>
-                    <ThemedText variate="subtitle1" color="textPrimary">
-                        {filteredInvoices.length}
-                    </ThemedText>
-                </Card>
-            </ScrollView>
-
-            {/* Filters */}
-            <View style={styles.filtersWrapper}>
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.filtersContent}
-                >
-                    {FILTERS.map(filter => (
-                        <TouchableOpacity
-                            key={filter.id}
-                            style={[
-                                styles.filterChip,
-                                selectedFilter === filter.id && {
-                                    backgroundColor: colors.hotelPrimary,
-                                },
-                            ]}
-                            onPress={() => setSelectedFilter(filter.id)}
-                        >
-                            <Text
+            <FlatList
+                data={filtered}
+                keyExtractor={(i) => i.id}
+                contentContainerStyle={styles.list}
+                ListHeaderComponent={
+                    <>
+                        {/* Outstanding summary */}
+                        {outstanding > 0 ? (
+                            <Card
+                                padding={16}
                                 style={[
-                                    styles.filterChipText,
+                                    styles.outstanding,
                                     {
-                                        color: selectedFilter === filter.id
-                                            ? '#FFFFFF'
-                                            : colors.textSecondary,
+                                        backgroundColor: colors.terra100,
+                                        borderColor: colors.terra600,
                                     },
                                 ]}
                             >
-                                {filter.label}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
-            </View>
+                                <View style={styles.outstandingTop}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text
+                                            style={[
+                                                styles.capsLabel,
+                                                { color: colors.terra700 },
+                                            ]}
+                                        >
+                                            À régler
+                                        </Text>
+                                        <View style={styles.amountRow}>
+                                            <Text
+                                                style={[styles.amount, { color: colors.ink900 }]}
+                                            >
+                                                {formatCFA(outstanding)}
+                                            </Text>
+                                            <Text
+                                                style={[
+                                                    styles.amountUnit,
+                                                    { color: colors.ink500 },
+                                                ]}
+                                            >
+                                                F
+                                            </Text>
+                                        </View>
+                                        <Text
+                                            style={[styles.summaryLine, { color: colors.ink600 }]}
+                                        >
+                                            {pendingCount} facture{pendingCount > 1 ? "s" : ""}{" "}
+                                            en attente
+                                            {overdueCount > 0
+                                                ? ` · ${overdueCount} en retard`
+                                                : ""}
+                                        </Text>
+                                    </View>
+                                    <View
+                                        style={[
+                                            styles.outstandingIcon,
+                                            { backgroundColor: colors.terra600 },
+                                        ]}
+                                    >
+                                        <Icon
+                                            name="alert"
+                                            size={20}
+                                            color={colors.paper}
+                                            stroke={2}
+                                        />
+                                    </View>
+                                </View>
+                                <Pressable
+                                    onPress={handlePay}
+                                    style={[
+                                        styles.payCTA,
+                                        { backgroundColor: colors.terra700 },
+                                    ]}
+                                >
+                                    <Text style={[styles.payCTAText, { color: colors.paper }]}>
+                                        Payer · Orange Money / Wave
+                                    </Text>
+                                </Pressable>
+                            </Card>
+                        ) : null}
 
-            {/* Invoices List */}
-            <FlatList
-                data={filteredInvoices}
-                renderItem={renderInvoiceCard}
-                keyExtractor={item => item.id}
-                contentContainerStyle={styles.listContent}
+                        {/* Filters */}
+                        <View style={styles.tabsWrap}>
+                            <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={styles.tabs}
+                            >
+                                {FILTERS.map((f) => {
+                                    const active = selected === f.id;
+                                    return (
+                                        <Pressable
+                                            key={f.id}
+                                            onPress={() => setSelected(f.id)}
+                                            style={[
+                                                styles.tab,
+                                                {
+                                                    backgroundColor: active
+                                                        ? colors.ink900
+                                                        : colors.paper,
+                                                    borderColor: active
+                                                        ? colors.ink900
+                                                        : colors.ink200,
+                                                },
+                                            ]}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.tabText,
+                                                    {
+                                                        color: active
+                                                            ? colors.paper
+                                                            : colors.ink700,
+                                                    },
+                                                ]}
+                                            >
+                                                {f.label}
+                                            </Text>
+                                        </Pressable>
+                                    );
+                                })}
+                            </ScrollView>
+                        </View>
+
+                        <ThemedText
+                            variate="caps"
+                            color="ink500"
+                            style={styles.historyLabel}
+                        >
+                            Historique
+                        </ThemedText>
+                    </>
+                }
+                renderItem={({ item }) => <InvoiceRow invoice={item} />}
                 ListEmptyComponent={
-                    <View style={styles.emptyContainer}>
-                        <Text style={styles.emptyIcon}>📄</Text>
-                        <ThemedText variate="subtitle2" color="textSecondary">
-                            Aucune facture trouvée
+                    <View style={styles.empty}>
+                        <Icon name="receipt" size={48} color={colors.ink300} stroke={1.2} />
+                        <ThemedText
+                            variate="subtitle"
+                            color="ink500"
+                            style={{ marginTop: 12 }}
+                        >
+                            Aucune facture
                         </ThemedText>
                     </View>
                 }
@@ -309,142 +271,191 @@ export default function InvoicesScreen() {
     );
 }
 
+function InvoiceRow({ invoice }: { invoice: Invoice }) {
+    const colors = useThemeColors();
+    const status = resolveStatus(invoice);
+
+    return (
+        <Card padding={14} style={styles.row}>
+            <View style={[styles.rowIcon, { backgroundColor: colors.paper2 }]}>
+                <Icon name="receipt" size={18} color={colors.ink600} />
+            </View>
+            <View style={styles.rowBody}>
+                <View style={styles.rowHeader}>
+                    <Text style={[styles.rowCode, { color: colors.ink500 }]}>
+                        {invoice.invoiceNumber}
+                    </Text>
+                    <StatusBadge status={STATUS_TO_UI[status]} />
+                </View>
+                <Text style={[styles.rowPeriod, { color: colors.ink900 }]}>
+                    {capitalize(formatMonth(invoice.createdAt))}
+                </Text>
+                {status === "paid" && invoice.paymentMethod ? (
+                    <Text style={[styles.rowDue, { color: colors.ink500 }]}>
+                        Payée · {PAYMENT_METHOD_LABELS[invoice.paymentMethod]}
+                    </Text>
+                ) : (
+                    <Text style={[styles.rowDue, { color: colors.ink500 }]}>
+                        échéance {formatDueShort(invoice.dueDate)}
+                    </Text>
+                )}
+            </View>
+            <View style={styles.rowRight}>
+                <Text style={[styles.rowAmount, { color: colors.ink900 }]}>
+                    {formatCFA(invoice.total)}
+                </Text>
+                <Text style={[styles.rowAmountUnit, { color: colors.ink500 }]}>F CFA TTC</Text>
+            </View>
+        </Card>
+    );
+}
+
+function capitalize(s: string) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
+    container: { flex: 1 },
+
     header: {
-        paddingHorizontal: Spacing.padding.screen,
-        paddingTop: Spacing.xl,
-        paddingBottom: Spacing.md,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
     },
-    summaryContainer: {
-        maxHeight: 100,
-        marginBottom: Spacing.md,
+    headerSub: { marginTop: 2 },
+
+    list: {
+        padding: 16,
+        paddingBottom: 120,
+        gap: 8,
     },
-    summaryContent: {
-        paddingHorizontal: Spacing.padding.screen,
-        gap: Spacing.md,
+
+    // Outstanding card
+    outstanding: {
+        marginBottom: 14,
     },
-    summaryCard: {
-        width: 140,
-        alignItems: 'center',
-        padding: Spacing.md,
+    outstandingTop: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "flex-start",
     },
-    summaryIcon: {
+    capsLabel: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.micro,
+        letterSpacing: Typography.letterSpacing.wide,
+        textTransform: "uppercase",
+    },
+    amountRow: {
+        flexDirection: "row",
+        alignItems: "baseline",
+        gap: 6,
+        marginTop: 4,
+    },
+    amount: {
+        fontFamily: FontFamily.serifMedium,
         fontSize: 32,
-        marginBottom: Spacing.xs,
+        lineHeight: 34,
+        letterSpacing: -0.5,
     },
-    filtersWrapper: {
-        marginBottom: Spacing.md,
-        paddingVertical: Spacing.xs,
+    amountUnit: {
+        fontFamily: FontFamily.serifMedium,
+        fontSize: 14,
     },
-    filtersContent: {
-        paddingHorizontal: Spacing.padding.screen,
-        gap: Spacing.xs,
+    summaryLine: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 4,
     },
-    filterChip: {
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.sm,
-        borderRadius: Spacing.borderRadius.full,
-        backgroundColor: '#F3F4F6',
+    outstandingIcon: {
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        alignItems: "center",
+        justifyContent: "center",
     },
-    filterChipText: {
-        fontSize: Typography.fontSize.sm,
-        fontWeight: Typography.fontWeight.semibold,
+    payCTA: {
+        marginTop: 12,
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        borderRadius: 10,
+        alignItems: "center",
     },
-    listContent: {
-        paddingHorizontal: Spacing.padding.screen,
-        paddingBottom: 100, // Espace pour la navigation flottante
-    },
-    invoiceCard: {
-        marginBottom: Spacing.md,
-    },
-    invoiceHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: Spacing.md,
-    },
-    statusBadge: {
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.xs,
-        borderRadius: Spacing.borderRadius.md,
-    },
-    statusText: {
+    payCTAText: {
+        fontFamily: FontFamily.uiSemibold,
         fontSize: Typography.fontSize.xs,
-        fontWeight: Typography.fontWeight.semibold,
     },
-    itemsContainer: {
-        marginBottom: Spacing.md,
-        paddingVertical: Spacing.sm,
-        borderTopWidth: 1,
-        borderBottomWidth: 1,
-        borderColor: '#E5E7EB',
+
+    // Tabs
+    tabsWrap: {
+        marginTop: 6,
+        marginBottom: 12,
     },
-    itemRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: Spacing.xs,
+    tabs: { gap: 6 },
+    tab: {
+        paddingHorizontal: 13,
+        paddingVertical: 7,
+        borderRadius: 99,
+        borderWidth: StyleSheet.hairlineWidth,
     },
-    totalsContainer: {
-        marginBottom: Spacing.md,
+    tabText: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.xs,
     },
-    totalRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: Spacing.xs,
+
+    historyLabel: {
+        marginBottom: 10,
+        paddingLeft: 2,
     },
-    grandTotalRow: {
-        marginTop: Spacing.sm,
-        paddingTop: Spacing.sm,
-        borderTopWidth: 1,
-        borderColor: '#E5E7EB',
+
+    // Row
+    row: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
     },
-    dueDateContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFF7ED',
-        padding: Spacing.sm,
-        borderRadius: Spacing.borderRadius.md,
-        marginBottom: Spacing.sm,
+    rowIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 10,
+        alignItems: "center",
+        justifyContent: "center",
     },
-    dueDateIcon: {
-        fontSize: 16,
-        marginRight: Spacing.sm,
+    rowBody: { flex: 1 },
+    rowHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
     },
-    paymentInfoContainer: {
-        marginBottom: Spacing.sm,
+    rowCode: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.tiny,
     },
-    paymentInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F0FDF4',
-        padding: Spacing.sm,
-        borderRadius: Spacing.borderRadius.md,
-    },
-    paymentIcon: {
-        fontSize: 16,
-        marginRight: Spacing.sm,
-        color: '#228B22',
-    },
-    paymentButton: {
-        paddingVertical: Spacing.md,
-        borderRadius: Spacing.borderRadius.md,
-        alignItems: 'center',
-    },
-    paymentButtonText: {
-        color: '#FFFFFF',
+    rowPeriod: {
+        fontFamily: FontFamily.uiMedium,
         fontSize: Typography.fontSize.sm,
-        fontWeight: Typography.fontWeight.semibold,
+        marginTop: 3,
     },
-    emptyContainer: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: Spacing.huge,
+    rowDue: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 1,
     },
-    emptyIcon: {
-        fontSize: 64,
-        marginBottom: Spacing.md,
+    rowRight: {
+        alignItems: "flex-end",
+    },
+    rowAmount: {
+        fontFamily: FontFamily.monoMedium,
+        fontSize: Typography.fontSize.lg,
+        lineHeight: Typography.fontSize.lg,
+    },
+    rowAmountUnit: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
+        marginTop: 2,
+    },
+
+    empty: {
+        alignItems: "center",
+        paddingVertical: 64,
     },
 });

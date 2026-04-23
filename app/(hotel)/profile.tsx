@@ -1,415 +1,427 @@
-import React, { useState } from 'react';
+import { Fragment, useState } from "react";
 import {
-    View,
-    Text,
-    StyleSheet,
-    ScrollView,
-    TouchableOpacity,
-    Switch,
     Alert,
-    SafeAreaView,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { useAuth } from '@/contexts/AuthContext';
-import { useThemeColors } from '@/hooks/useThemeColors';
-import Card from '@/components/ui/Card';
-import ThemedText from '@/components/ui/ThemedText';
-import Button from '@/components/ui/Button';
-import Input from '@/components/ui/Input';
-import { Spacing } from '@/constants/Spacing';
-import { Typography } from '@/constants/Typography';
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 
-export default function ProfileScreen() {
+import Card from "@/components/ui/Card";
+import Icon, { IconName } from "@/components/ui/Icon";
+import ThemedText from "@/components/ui/ThemedText";
+import { FontFamily, Typography } from "@/constants/Typography";
+import { useAuth } from "@/contexts/AuthContext";
+import { useThemeColors } from "@/hooks/useThemeColors";
+
+type MenuItem = {
+    icon: IconName;
+    label: string;
+    sub?: string;
+    onPress?: () => void;
+};
+
+type MenuGroup = {
+    title: string;
+    items: MenuItem[];
+};
+
+export default function HotelProfileScreen() {
     const router = useRouter();
     const { user, logout } = useAuth();
     const colors = useThemeColors();
 
-    // Settings state
-    const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-    const [emailNotifications, setEmailNotifications] = useState(true);
-    const [smsNotifications, setSmsNotifications] = useState(false);
-    const [collectionReminders, setCollectionReminders] = useState(true);
-    const [invoiceAlerts, setInvoiceAlerts] = useState(true);
+    const [pushEnabled, setPushEnabled] = useState(true);
+    const [emailEnabled, setEmailEnabled] = useState(true);
 
-    const handleLogout = () => {
-        Alert.alert(
-            'Déconnexion',
-            'Êtes-vous sûr de vouloir vous déconnecter?',
-            [
+    const handleLogout = () =>
+        Alert.alert("Déconnexion", "Se déconnecter de votre espace ?", [
+            { text: "Annuler", style: "cancel" },
+            {
+                text: "Déconnexion",
+                style: "destructive",
+                onPress: async () => {
+                    await logout();
+                    router.replace("/(auth)/sign-in");
+                },
+            },
+        ]);
+
+    const initials = (user?.name ?? "")
+        .split(" ")
+        .map((w) => w.charAt(0))
+        .filter(Boolean)
+        .slice(0, 2)
+        .join("")
+        .toUpperCase() || "PT";
+
+    const groups: MenuGroup[] = [
+        {
+            title: "Établissement",
+            items: [
+                { icon: "user", label: "Sous-comptes", sub: "4 utilisateurs" },
                 {
-                    text: 'Annuler',
-                    style: 'cancel',
+                    icon: "receipt",
+                    label: "Informations facturation",
+                    sub: "NINEA · KYC à jour",
                 },
                 {
-                    text: 'Déconnexion',
-                    style: 'destructive',
-                    onPress: async () => {
-                        await logout();
-                        router.replace('/(auth)/sign-in');
-                    },
+                    icon: "calendar",
+                    label: "Planning contractuel",
+                    sub: "3 collectes / semaine",
+                    onPress: () => router.push("/(hotel)/planning"),
                 },
-            ]
-        );
-    };
-
-    const handleEditProfile = () => {
-        // TODO: Navigate to edit profile screen
-        Alert.alert('Modifier le profil', 'Fonctionnalité en cours de développement');
-    };
-
-    const handleChangePassword = () => {
-        // TODO: Navigate to change password screen
-        router.push('/(auth)/change-password');
-    };
+            ],
+        },
+        {
+            title: "Support",
+            items: [
+                {
+                    icon: "msg",
+                    label: "Contacter le support",
+                    sub: "24h/24 · 7j/7",
+                    onPress: () => router.push("/(hotel)/support"),
+                },
+                { icon: "alert", label: "Déclarer un incident" },
+            ],
+        },
+        {
+            title: "Compte",
+            items: [
+                { icon: "settings", label: "Langue & thème", sub: "Français · Clair" },
+                { icon: "tag", label: "Conditions d'utilisation" },
+                { icon: "tag", label: "Politique de confidentialité" },
+            ],
+        },
+    ];
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            <ScrollView
-                style={{ flex: 1 }}
-                contentContainerStyle={styles.content}
+        <SafeAreaView
+            edges={["top"]}
+            style={[styles.container, { backgroundColor: colors.paper2 }]}
+        >
+            <View
+                style={[
+                    styles.header,
+                    { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
+                ]}
             >
-            {/* Header with Avatar */}
-            <View style={styles.header}>
-                <View style={[styles.avatar, { backgroundColor: colors.hotelPrimary }]}>
-                    <Text style={styles.avatarText}>
-                        {user?.name?.charAt(0).toUpperCase() || 'H'}
-                    </Text>
-                </View>
-                <ThemedText variate="headline" color="textPrimary">
-                    {user?.name || 'Hôtel'}
-                </ThemedText>
-                <ThemedText variate="body3" color="textSecondary">
-                    {user?.email}
-                </ThemedText>
-                <TouchableOpacity
-                    style={[styles.editButton, { borderColor: colors.hotelPrimary }]}
-                    onPress={handleEditProfile}
-                >
-                    <Text style={[styles.editButtonText, { color: colors.hotelPrimary }]}>
-                        ✏️ Modifier le profil
-                    </Text>
-                </TouchableOpacity>
+                <ThemedText variate="title">Profil</ThemedText>
             </View>
 
-            {/* Hotel Information */}
-            <Card>
-                <ThemedText variate="subtitle1" color="textPrimary" style={styles.sectionTitle}>
-                    Informations de l'établissement
-                </ThemedText>
-                <View style={styles.infoRow}>
-                    <Text style={styles.infoIcon}>🏨</Text>
-                    <View style={{ flex: 1 }}>
-                        <ThemedText variate="caption" color="textSecondary">
-                            Nom de l'établissement
-                        </ThemedText>
-                        <ThemedText variate="body2" color="textPrimary">
-                            {user?.name || 'Hôtel Teranga'}
-                        </ThemedText>
+            <ScrollView
+                contentContainerStyle={styles.content}
+                showsVerticalScrollIndicator={false}
+            >
+                {/* Identity hero */}
+                <Card
+                    padding={18}
+                    style={[
+                        styles.identity,
+                        { backgroundColor: colors.brand900, borderColor: colors.brand900 },
+                    ]}
+                >
+                    <View style={styles.identityTop}>
+                        <View style={[styles.identityAvatar, { backgroundColor: colors.terra600 }]}>
+                            <Text style={[styles.identityAvatarText, { color: colors.paper }]}>
+                                {initials}
+                            </Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.identityName, { color: colors.paper }]}>
+                                {user?.name ?? "Établissement"}
+                            </Text>
+                            <Text style={[styles.identityMeta, { color: colors.brand100 }]}>
+                                ★★★★ · Hôtel 4 étoiles
+                            </Text>
+                            <Text style={[styles.identitySub, { color: colors.brand100 }]}>
+                                {user?.email ?? ""}
+                            </Text>
+                        </View>
                     </View>
-                </View>
-                <View style={styles.infoRow}>
-                    <Text style={styles.infoIcon}>📍</Text>
-                    <View style={{ flex: 1 }}>
-                        <ThemedText variate="caption" color="textSecondary">
-                            Adresse
-                        </ThemedText>
-                        <ThemedText variate="body2" color="textPrimary">
-                            Almadies, Route de Ngor, Dakar
-                        </ThemedText>
-                    </View>
-                </View>
-                <View style={styles.infoRow}>
-                    <Text style={styles.infoIcon}>📞</Text>
-                    <View style={{ flex: 1 }}>
-                        <ThemedText variate="caption" color="textSecondary">
-                            Téléphone
-                        </ThemedText>
-                        <ThemedText variate="body2" color="textPrimary">
-                            {user?.phone || '+221 33 123 45 67'}
-                        </ThemedText>
-                    </View>
-                </View>
-                <View style={styles.infoRow}>
-                    <Text style={styles.infoIcon}>✉️</Text>
-                    <View style={{ flex: 1 }}>
-                        <ThemedText variate="caption" color="textSecondary">
-                            Email
-                        </ThemedText>
-                        <ThemedText variate="body2" color="textPrimary">
-                            {user?.email}
-                        </ThemedText>
-                    </View>
-                </View>
-            </Card>
 
-            {/* Notifications Settings */}
-            <Card>
-                <ThemedText variate="subtitle1" color="textPrimary" style={styles.sectionTitle}>
-                    Notifications
-                </ThemedText>
-                <View style={styles.settingRow}>
-                    <View style={{ flex: 1 }}>
-                        <ThemedText variate="body2" color="textPrimary">
-                            Activer les notifications
-                        </ThemedText>
-                        <ThemedText variate="caption" color="textSecondary">
-                            Recevoir toutes les notifications
-                        </ThemedText>
+                    <View style={[styles.identityStats, { borderTopColor: colors.brand700 }]}>
+                        <IdentityStat value="52" label="Commandes / mois" color={colors.paper} sub={colors.brand100} />
+                        <IdentityStat value="3,2 t" label="Volume / mois" color={colors.paper} sub={colors.brand100} />
+                        <IdentityStat value="2024" label="Client depuis" color={colors.paper} sub={colors.brand100} />
                     </View>
-                    <Switch
-                        value={notificationsEnabled}
-                        onValueChange={setNotificationsEnabled}
-                        trackColor={{ false: '#D1D5DB', true: colors.hotelPrimary + '50' }}
-                        thumbColor={notificationsEnabled ? colors.hotelPrimary : '#9CA3AF'}
-                    />
-                </View>
+                </Card>
 
-                {notificationsEnabled && (
-                    <>
-                        <View style={styles.settingRow}>
-                            <View style={{ flex: 1 }}>
-                                <ThemedText variate="body3" color="textPrimary">
-                                    Notifications par email
-                                </ThemedText>
-                            </View>
-                            <Switch
-                                value={emailNotifications}
-                                onValueChange={setEmailNotifications}
-                                trackColor={{ false: '#D1D5DB', true: colors.hotelPrimary + '50' }}
-                                thumbColor={emailNotifications ? colors.hotelPrimary : '#9CA3AF'}
-                            />
-                        </View>
-                        <View style={styles.settingRow}>
-                            <View style={{ flex: 1 }}>
-                                <ThemedText variate="body3" color="textPrimary">
-                                    Notifications par SMS
-                                </ThemedText>
-                            </View>
-                            <Switch
-                                value={smsNotifications}
-                                onValueChange={setSmsNotifications}
-                                trackColor={{ false: '#D1D5DB', true: colors.hotelPrimary + '50' }}
-                                thumbColor={smsNotifications ? colors.hotelPrimary : '#9CA3AF'}
-                            />
-                        </View>
-                        <View style={styles.settingRow}>
-                            <View style={{ flex: 1 }}>
-                                <ThemedText variate="body3" color="textPrimary">
-                                    Rappels de collecte
-                                </ThemedText>
-                            </View>
-                            <Switch
-                                value={collectionReminders}
-                                onValueChange={setCollectionReminders}
-                                trackColor={{ false: '#D1D5DB', true: colors.hotelPrimary + '50' }}
-                                thumbColor={collectionReminders ? colors.hotelPrimary : '#9CA3AF'}
-                            />
-                        </View>
-                        <View style={styles.settingRow}>
-                            <View style={{ flex: 1 }}>
-                                <ThemedText variate="body3" color="textPrimary">
-                                    Alertes de facturation
-                                </ThemedText>
-                            </View>
-                            <Switch
-                                value={invoiceAlerts}
-                                onValueChange={setInvoiceAlerts}
-                                trackColor={{ false: '#D1D5DB', true: colors.hotelPrimary + '50' }}
-                                thumbColor={invoiceAlerts ? colors.hotelPrimary : '#9CA3AF'}
-                            />
-                        </View>
-                    </>
-                )}
-            </Card>
-
-            {/* Preferences */}
-            <Card>
-                <ThemedText variate="subtitle1" color="textPrimary" style={styles.sectionTitle}>
+                {/* Préférences */}
+                <ThemedText variate="caps" color="ink500" style={styles.groupLabel}>
                     Préférences
                 </ThemedText>
-                <TouchableOpacity style={styles.preferenceRow}>
-                    <Text style={styles.preferenceIcon}>🌐</Text>
-                    <View style={{ flex: 1 }}>
-                        <ThemedText variate="body2" color="textPrimary">
-                            Langue
-                        </ThemedText>
-                        <ThemedText variate="caption" color="textSecondary">
-                            Français
-                        </ThemedText>
-                    </View>
-                    <Text style={styles.arrowIcon}>›</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.preferenceRow}>
-                    <Text style={styles.preferenceIcon}>🎨</Text>
-                    <View style={{ flex: 1 }}>
-                        <ThemedText variate="body2" color="textPrimary">
-                            Thème
-                        </ThemedText>
-                        <ThemedText variate="caption" color="textSecondary">
-                            Clair
-                        </ThemedText>
-                    </View>
-                    <Text style={styles.arrowIcon}>›</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.preferenceRow}>
-                    <Text style={styles.preferenceIcon}>💳</Text>
-                    <View style={{ flex: 1 }}>
-                        <ThemedText variate="body2" color="textPrimary">
-                            Méthode de paiement
-                        </ThemedText>
-                        <ThemedText variate="caption" color="textSecondary">
-                            Virement bancaire
-                        </ThemedText>
-                    </View>
-                    <Text style={styles.arrowIcon}>›</Text>
-                </TouchableOpacity>
-            </Card>
+                <Card padding={0} style={styles.group}>
+                    <ToggleRow
+                        icon="bell"
+                        label="Notifications push"
+                        sub="Commandes, livraisons, incidents"
+                        value={pushEnabled}
+                        onValueChange={setPushEnabled}
+                    />
+                    <Divider />
+                    <ToggleRow
+                        icon="msg"
+                        label="Notifications email"
+                        sub="Factures + synthèses hebdo"
+                        value={emailEnabled}
+                        onValueChange={setEmailEnabled}
+                    />
+                </Card>
 
-            {/* Account Actions */}
-            <Card>
-                <ThemedText variate="subtitle1" color="textPrimary" style={styles.sectionTitle}>
-                    Compte
-                </ThemedText>
-                <TouchableOpacity
-                    style={styles.actionRow}
-                    onPress={handleChangePassword}
+                {/* Menu groups */}
+                {groups.map((g) => (
+                    <Fragment key={g.title}>
+                        <ThemedText variate="caps" color="ink500" style={styles.groupLabel}>
+                            {g.title}
+                        </ThemedText>
+                        <Card padding={0} style={styles.group}>
+                            {g.items.map((item, i) => (
+                                <Fragment key={item.label}>
+                                    <MenuRow
+                                        icon={item.icon}
+                                        label={item.label}
+                                        sub={item.sub}
+                                        onPress={item.onPress}
+                                    />
+                                    {i < g.items.length - 1 && <Divider />}
+                                </Fragment>
+                            ))}
+                        </Card>
+                    </Fragment>
+                ))}
+
+                {/* Logout */}
+                <Pressable
+                    onPress={handleLogout}
+                    style={[
+                        styles.logout,
+                        { backgroundColor: colors.paper, borderColor: colors.danger600 },
+                    ]}
                 >
-                    <Text style={styles.actionIcon}>🔒</Text>
-                    <ThemedText variate="body2" color="textPrimary" style={{ flex: 1 }}>
-                        Modifier le mot de passe
-                    </ThemedText>
-                    <Text style={styles.arrowIcon}>›</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionRow}>
-                    <Text style={styles.actionIcon}>📄</Text>
-                    <ThemedText variate="body2" color="textPrimary" style={{ flex: 1 }}>
-                        Conditions d'utilisation
-                    </ThemedText>
-                    <Text style={styles.arrowIcon}>›</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionRow}>
-                    <Text style={styles.actionIcon}>🔐</Text>
-                    <ThemedText variate="body2" color="textPrimary" style={{ flex: 1 }}>
-                        Politique de confidentialité
-                    </ThemedText>
-                    <Text style={styles.arrowIcon}>›</Text>
-                </TouchableOpacity>
-            </Card>
+                    <Icon name="logout" size={16} color={colors.danger600} />
+                    <Text style={[styles.logoutText, { color: colors.danger600 }]}>
+                        Déconnexion
+                    </Text>
+                </Pressable>
 
-            {/* App Info */}
-            <Card style={{ backgroundColor: '#F3F4F6' }}>
-                <View style={styles.appInfo}>
-                    <ThemedText variate="caption" color="textSecondary">
-                        LaundryKing v1.0.0
-                    </ThemedText>
-                    <ThemedText variate="caption" color="textSecondary">
-                        © 2024 LaundryKing. Tous droits réservés.
-                    </ThemedText>
-                </View>
-            </Card>
-
-            {/* Logout Button */}
-            <Button
-                title="Se déconnecter"
-                onPress={handleLogout}
-                variant="outline"
-                style={styles.logoutButton}
-            />
+                <Text style={[styles.version, { color: colors.ink500 }]}>
+                    Blanchisserie SN · v1.0.0
+                </Text>
             </ScrollView>
         </SafeAreaView>
     );
 }
 
+function IdentityStat({
+    value,
+    label,
+    color,
+    sub,
+}: {
+    value: string;
+    label: string;
+    color: string;
+    sub: string;
+}) {
+    return (
+        <View style={{ flex: 1 }}>
+            <Text style={[styles.identityStatValue, { color }]}>{value}</Text>
+            <Text style={[styles.identityStatLabel, { color: sub }]}>{label}</Text>
+        </View>
+    );
+}
+
+function MenuRow({
+    icon,
+    label,
+    sub,
+    onPress,
+}: {
+    icon: IconName;
+    label: string;
+    sub?: string;
+    onPress?: () => void;
+}) {
+    const colors = useThemeColors();
+    return (
+        <Pressable onPress={onPress} style={styles.row}>
+            <View style={[styles.rowIcon, { backgroundColor: colors.paper2 }]}>
+                <Icon name={icon} size={15} color={colors.ink600} />
+            </View>
+            <View style={{ flex: 1 }}>
+                <Text style={[styles.rowLabel, { color: colors.ink900 }]}>{label}</Text>
+                {sub && <Text style={[styles.rowSub, { color: colors.ink500 }]}>{sub}</Text>}
+            </View>
+            <Icon name="chevRight" size={14} color={colors.ink400} />
+        </Pressable>
+    );
+}
+
+function ToggleRow({
+    icon,
+    label,
+    sub,
+    value,
+    onValueChange,
+}: {
+    icon: IconName;
+    label: string;
+    sub?: string;
+    value: boolean;
+    onValueChange: (v: boolean) => void;
+}) {
+    const colors = useThemeColors();
+    return (
+        <View style={styles.row}>
+            <View style={[styles.rowIcon, { backgroundColor: colors.paper2 }]}>
+                <Icon name={icon} size={15} color={colors.ink600} />
+            </View>
+            <View style={{ flex: 1 }}>
+                <Text style={[styles.rowLabel, { color: colors.ink900 }]}>{label}</Text>
+                {sub && <Text style={[styles.rowSub, { color: colors.ink500 }]}>{sub}</Text>}
+            </View>
+            <Switch
+                value={value}
+                onValueChange={onValueChange}
+                trackColor={{ false: colors.ink200, true: colors.brand500 }}
+                thumbColor={value ? colors.brand800 : colors.paper}
+            />
+        </View>
+    );
+}
+
+function Divider() {
+    const colors = useThemeColors();
+    return <View style={[styles.divider, { backgroundColor: colors.ink200 }]} />;
+}
+
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    content: {
-        padding: Spacing.padding.screen,
-        paddingBottom: 100, // Espace pour la navigation flottante
-    },
+    container: { flex: 1 },
     header: {
-        alignItems: 'center',
-        marginBottom: Spacing.xl,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
     },
-    avatar: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: Spacing.md,
+
+    content: {
+        padding: 16,
+        paddingBottom: 120,
     },
-    avatarText: {
-        fontSize: 32,
-        fontWeight: Typography.fontWeight.bold,
-        color: '#FFFFFF',
+
+    // Identity hero
+    identity: { marginBottom: 14 },
+    identityTop: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 14,
     },
-    editButton: {
-        marginTop: Spacing.md,
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.sm,
-        borderRadius: Spacing.borderRadius.full,
-        borderWidth: 2,
+    identityAvatar: {
+        width: 56,
+        height: 56,
+        borderRadius: 14,
+        alignItems: "center",
+        justifyContent: "center",
     },
-    editButtonText: {
-        fontSize: Typography.fontSize.sm,
-        fontWeight: Typography.fontWeight.semibold,
-    },
-    sectionTitle: {
-        marginBottom: Spacing.md,
-    },
-    infoRow: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: Spacing.md,
-        paddingVertical: Spacing.sm,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
-    },
-    infoIcon: {
+    identityAvatarText: {
+        fontFamily: FontFamily.uiSemibold,
         fontSize: 20,
+    },
+    identityName: {
+        fontFamily: FontFamily.serifMedium,
+        fontSize: 20,
+        letterSpacing: -0.3,
+    },
+    identityMeta: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 3,
+    },
+    identitySub: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
         marginTop: 2,
     },
-    settingRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: Spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
+    identityStats: {
+        flexDirection: "row",
+        gap: 20,
+        marginTop: 14,
+        paddingTop: 14,
+        borderTopWidth: StyleSheet.hairlineWidth,
     },
-    preferenceRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: Spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
-    },
-    preferenceIcon: {
-        fontSize: 24,
-        marginRight: Spacing.md,
-    },
-    arrowIcon: {
-        fontSize: 24,
-        color: '#9CA3AF',
-    },
-    actionRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: Spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
-    },
-    actionIcon: {
+    identityStatValue: {
+        fontFamily: FontFamily.serifMedium,
         fontSize: 20,
-        marginRight: Spacing.md,
     },
-    appInfo: {
-        alignItems: 'center',
-        gap: Spacing.xs,
+    identityStatLabel: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
+        marginTop: 2,
     },
-    logoutButton: {
-        marginTop: Spacing.lg,
+
+    // Group label + container
+    groupLabel: {
+        marginBottom: 8,
+        marginTop: 14,
+        paddingLeft: 4,
+    },
+    group: {
+        overflow: "hidden",
+    },
+
+    // Row
+    row: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+    },
+    rowIcon: {
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    rowLabel: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.sm,
+    },
+    rowSub: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 1,
+    },
+    divider: {
+        height: StyleSheet.hairlineWidth,
+        marginLeft: 58,
+    },
+
+    // Logout
+    logout: {
+        marginTop: 18,
+        padding: 12,
+        borderRadius: 10,
+        borderWidth: StyleSheet.hairlineWidth,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+    },
+    logoutText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
+    },
+
+    version: {
+        textAlign: "center",
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.micro,
+        marginTop: 16,
     },
 });
