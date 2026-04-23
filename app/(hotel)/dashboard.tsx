@@ -1,23 +1,62 @@
-import React, { useState } from 'react';
+import { useMemo, useState } from "react";
 import {
-    View,
-    Text,
-    StyleSheet,
+    Pressable,
     ScrollView,
+    StyleSheet,
+    Text,
     TouchableOpacity,
-    SafeAreaView,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { useAuth } from '@/contexts/AuthContext';
-import { useOrder } from '@/contexts/OrderContext';
-import { useThemeColors } from '@/hooks/useThemeColors';
-import Card from '@/components/ui/Card';
-import ThemedText from '@/components/ui/ThemedText';
-import Button from '@/components/ui/Button';
-import DrawerMenu from '@/components/shared/DrawerMenu';
-import { Spacing } from '@/constants/Spacing';
-import { Typography } from '@/constants/Typography';
-import { mockInvoices } from '@/data/mock-invoices';
+    View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+
+import Card from "@/components/ui/Card";
+import Icon, { IconName } from "@/components/ui/Icon";
+import StatusBadge, { OrderStatus } from "@/components/ui/StatusBadge";
+import ThemedText from "@/components/ui/ThemedText";
+import DrawerMenu from "@/components/shared/DrawerMenu";
+import { FontFamily, Typography } from "@/constants/Typography";
+import { useAuth } from "@/contexts/AuthContext";
+import { useOrder } from "@/contexts/OrderContext";
+import { useThemeColors } from "@/hooks/useThemeColors";
+import { mockInvoices } from "@/data/mock-invoices";
+import type { Order } from "@/types/order.types";
+
+const STATUS_TO_LABEL: Record<Order["status"], OrderStatus> = {
+    pending: "En attente",
+    confirmed: "Créée",
+    collected: "Collectée",
+    in_progress: "Traitement",
+    ready: "Prête",
+    delivered: "Livrée",
+    cancelled: "Annulée",
+};
+
+function countItems(order: Order): number {
+    if (!order.services) return 0;
+    return order.services.reduce(
+        (total, s) =>
+            total + (s.items?.reduce((sum, i) => sum + i.quantity, 0) || 0),
+        0,
+    );
+}
+
+function formatDate(iso: string): string {
+    const d = new Date(iso);
+    const today = new Date();
+    const sameDay =
+        d.getDate() === today.getDate() &&
+        d.getMonth() === today.getMonth() &&
+        d.getFullYear() === today.getFullYear();
+    if (sameDay) {
+        return `Aujourd'hui · ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+    }
+    return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+}
+
+function formatCFA(n: number): string {
+    return n.toLocaleString("fr-FR").replace(/\s/g, " ");
+}
 
 export default function HotelDashboard() {
     const router = useRouter();
@@ -26,542 +65,514 @@ export default function HotelDashboard() {
     const colors = useThemeColors();
     const [drawerVisible, setDrawerVisible] = useState(false);
 
-    // Calculate stats
-    const pendingOrders = orders.filter(o => o.status === 'pending' || o.status === 'confirmed').length;
-    const inProgressOrders = orders.filter(o => o.status === 'in_progress' || o.status === 'collected').length;
-    const pendingInvoices = mockInvoices.filter(i => i.status === 'pending').length;
-    const totalPending = mockInvoices
-        .filter(i => i.status === 'pending')
-        .reduce((sum, i) => sum + i.total, 0);
+    const greetingName = useMemo(
+        () => (user?.name ?? "").split(" ")[0] || "Bienvenue",
+        [user],
+    );
+
+    const pendingOrders = orders.filter(
+        (o) => o.status === "pending" || o.status === "confirmed",
+    ).length;
+    const inProgressOrders = orders.filter(
+        (o) => o.status === "in_progress" || o.status === "collected",
+    ).length;
+
+    const monthlyAmount = mockInvoices.reduce((sum, i) => sum + i.total, 0);
+    const monthlyWeight = orders.reduce(
+        (sum, o) => sum + (o.actualWeight ?? countItems(o) * 0.3),
+        0,
+    );
+
+    const recentOrders = useMemo(
+        () =>
+            [...orders]
+                .sort(
+                    (a, b) =>
+                        new Date(b.createdAt).getTime() -
+                        new Date(a.createdAt).getTime(),
+                )
+                .slice(0, 4),
+        [orders],
+    );
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <SafeAreaView
+            edges={["top"]}
+            style={[styles.container, { backgroundColor: colors.paper2 }]}
+        >
+            {/* Top bar */}
+            <View style={[styles.topBar, { borderBottomColor: colors.ink200, backgroundColor: colors.paper }]}>
+                <Pressable
+                    onPress={() => setDrawerVisible(true)}
+                    style={[styles.avatar, { backgroundColor: colors.brand100 }]}
+                    hitSlop={6}
+                >
+                    <Text style={[styles.avatarText, { color: colors.brand800 }]}>
+                        {greetingName.charAt(0).toUpperCase()}
+                    </Text>
+                </Pressable>
+                <View style={styles.topTitle}>
+                    <ThemedText variate="title">Bonjour, {greetingName}</ThemedText>
+                    <ThemedText variate="caption" color="ink500" style={styles.topSub}>
+                        {user?.name ?? "Votre espace pro"}
+                    </ThemedText>
+                </View>
+                <Pressable style={[styles.iconChip, { backgroundColor: colors.ink100 }]} hitSlop={6}>
+                    <Icon name="bell" size={16} color={colors.ink700} />
+                    <View style={[styles.notifDot, { backgroundColor: colors.terra600 }]} />
+                </Pressable>
+            </View>
+
             <ScrollView
                 style={{ flex: 1 }}
                 contentContainerStyle={styles.content}
+                showsVerticalScrollIndicator={false}
             >
-            {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity
-                    onPress={() => setDrawerVisible(true)}
-                    style={styles.iconButton}
-                >
-                    <Text style={styles.menuIcon}>☰</Text>
-                </TouchableOpacity>
-                <View style={styles.headerRight}>
-                    <TouchableOpacity style={styles.iconButton}>
-                        <Text style={styles.iconText}>🔔</Text>
-                        <View style={styles.badge} />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.iconButton}>
-                        <Text style={styles.iconText}>🔍</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
-
-            {/* Main Question */}
-            <View style={styles.questionSection}>
-                <ThemedText variate="headline" color="textPrimary" style={styles.mainQuestion}>
-                    De quel service avez-vous besoin aujourd'hui?
-                </ThemedText>
-            </View>
-
-            {/* Service Cards */}
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.servicesScroll}
-                contentContainerStyle={styles.servicesContent}
-            >
-                <TouchableOpacity
-                    style={styles.serviceCard}
-                    onPress={() => router.push('/(hotel)/new-order')}
-                >
-                    <View style={[styles.serviceIconContainer, { backgroundColor: '#E0F2FE' }]}>
-                        <Text style={styles.serviceIconLarge}>🧼</Text>
+                {/* Hero stat */}
+                <View style={[styles.hero, { backgroundColor: colors.brand900 }]}>
+                    <View
+                        style={[
+                            styles.heroBlob,
+                            { backgroundColor: colors.brand700, opacity: 0.5 },
+                        ]}
+                    />
+                    <Text style={[styles.heroCaps, { color: colors.brand100 }]}>
+                        Activité · Avril 2026
+                    </Text>
+                    <View style={styles.heroAmountRow}>
+                        <Text style={[styles.heroAmount, { color: colors.paper }]}>
+                            {formatCFA(monthlyAmount)}
+                        </Text>
+                        <Text style={[styles.heroCurrency, { color: colors.brand100 }]}>F</Text>
                     </View>
-                    <ThemedText variate="body3" color="textPrimary" style={styles.serviceLabel}>
-                        Nettoyage
-                    </ThemedText>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={styles.serviceCard}
-                    onPress={() => router.push('/(hotel)/new-order')}
-                >
-                    <View style={[styles.serviceIconContainer, { backgroundColor: '#FCE7F3' }]}>
-                        <Text style={styles.serviceIconLarge}>🧺</Text>
+                    <View style={styles.heroMetrics}>
+                        <View>
+                            <Text style={[styles.heroMetricValue, { color: colors.paper }]}>
+                                {monthlyWeight.toFixed(1).replace(".", ",")}{" "}
+                                <Text
+                                    style={[styles.heroMetricUnit, { color: colors.brand100 }]}
+                                >
+                                    kg
+                                </Text>
+                            </Text>
+                            <Text style={[styles.heroMetricLabel, { color: colors.brand100 }]}>
+                                Volume traité
+                            </Text>
+                        </View>
+                        <View style={[styles.heroDivider, { backgroundColor: colors.brand700 }]} />
+                        <View>
+                            <Text style={[styles.heroMetricValue, { color: colors.paper }]}>
+                                +8,2{" "}
+                                <Text
+                                    style={[styles.heroMetricUnit, { color: colors.brand100 }]}
+                                >
+                                    %
+                                </Text>
+                            </Text>
+                            <Text style={[styles.heroMetricLabel, { color: colors.brand100 }]}>
+                                vs mars
+                            </Text>
+                        </View>
                     </View>
-                    <ThemedText variate="body3" color="textPrimary" style={styles.serviceLabel}>
-                        Blanchisserie
-                    </ThemedText>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={styles.serviceCard}
-                    onPress={() => router.push('/(hotel)/new-order')}
-                >
-                    <View style={[styles.serviceIconContainer, { backgroundColor: '#DBEAFE' }]}>
-                        <Text style={styles.serviceIconLarge}>💧</Text>
-                    </View>
-                    <ThemedText variate="body3" color="textPrimary" style={styles.serviceLabel}>
-                        Aqua Clean
-                    </ThemedText>
-                </TouchableOpacity>
-            </ScrollView>
-
-            {/* Promo Banner */}
-            <TouchableOpacity style={styles.promoBanner}>
-                <View style={{ flex: 1 }}>
-                    <ThemedText variate="subtitle1" style={{ color: colors.hotelPrimary }}>
-                        Service Gratuit
-                    </ThemedText>
-                    <ThemedText variate="body3" color="textSecondary">
-                        Pour votre première commande!
-                    </ThemedText>
                 </View>
-                <View style={styles.promoIcon}>
-                    <Text style={{ fontSize: 40 }}>🎁</Text>
+
+                {/* Compact stats */}
+                <View style={styles.statsRow}>
+                    <StatCard
+                        icon="clock"
+                        iconBg={colors.warn100}
+                        iconFg={colors.warn700}
+                        value={pendingOrders}
+                        label="En attente"
+                    />
+                    <StatCard
+                        icon="package"
+                        iconBg={colors.brand100}
+                        iconFg={colors.brand800}
+                        value={inProgressOrders}
+                        label="En traitement"
+                    />
                 </View>
-            </TouchableOpacity>
 
-            {/* Pagination Dots */}
-            <View style={styles.paginationDots}>
-                <View style={[styles.dot, { backgroundColor: colors.hotelPrimary }]} />
-                <View style={[styles.dot, { backgroundColor: '#D1D5DB' }]} />
-                <View style={[styles.dot, { backgroundColor: '#D1D5DB' }]} />
-            </View>
-
-            {/* Quick Actions */}
-            <View style={styles.quickActionsSection}>
-                <ThemedText variate="subtitle1" color="textPrimary" style={styles.sectionTitle}>
+                {/* Quick actions */}
+                <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
                     Actions rapides
                 </ThemedText>
-
-                {/* Nouvelle commande - Grande carte principale */}
-                <TouchableOpacity
-                    style={[styles.mainActionCard, { backgroundColor: colors.hotelPrimary }]}
-                    onPress={() => router.push('/(hotel)/new-order')}
-                    activeOpacity={0.85}
-                >
-                    <View style={styles.mainActionContent}>
-                        <View>
-                            <Text style={styles.mainActionTitle}>Créer une commande</Text>
-                            <Text style={styles.mainActionSubtitle}>Passez une nouvelle commande rapidement</Text>
-                        </View>
-                        <View style={styles.mainActionIcon}>
-                            <Text style={styles.mainActionEmoji}>📝</Text>
-                        </View>
-                    </View>
-                </TouchableOpacity>
-
-                {/* Autres actions - Grille compacte */}
-                <View style={styles.quickActionsGrid}>
-                    <TouchableOpacity
-                        style={styles.compactActionCard}
-                        onPress={() => router.push('/(hotel)/orders')}
-                        activeOpacity={0.85}
+                <View style={styles.actionsRow}>
+                    <Pressable
+                        onPress={() => router.push("/(hotel)/new-order")}
+                        style={[styles.primaryAction, { backgroundColor: colors.brand800 }]}
                     >
-                        <View style={[styles.compactIconBox, { backgroundColor: '#EFF6FF' }]}>
-                            <Text style={styles.compactEmoji}>📦</Text>
-                        </View>
-                        <Text style={styles.compactActionTitle}>Commandes</Text>
-                        <Text style={styles.compactActionSubtitle}>Voir tout</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={styles.compactActionCard}
-                        onPress={() => router.push('/(hotel)/invoices')}
-                        activeOpacity={0.85}
+                        <Icon name="plus" size={18} color={colors.paper} stroke={2} />
+                        <Text style={[styles.primaryActionText, { color: colors.paper }]}>
+                            Nouvelle commande
+                        </Text>
+                    </Pressable>
+                    <Pressable
+                        onPress={() => router.push("/(hotel)/planning")}
+                        style={[
+                            styles.secondaryAction,
+                            { backgroundColor: colors.paper, borderColor: colors.ink200 },
+                        ]}
                     >
-                        <View style={[styles.compactIconBox, { backgroundColor: '#F0FDF4' }]}>
-                            <Text style={styles.compactEmoji}>💰</Text>
-                        </View>
-                        <Text style={styles.compactActionTitle}>Factures</Text>
-                        <Text style={styles.compactActionSubtitle}>Paiements</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={styles.compactActionCard}
-                        onPress={() => router.push('/(hotel)/planning')}
-                        activeOpacity={0.85}
+                        <Icon name="calendar" size={16} color={colors.ink700} />
+                        <Text style={[styles.secondaryActionText, { color: colors.ink800 }]}>
+                            Planifier
+                        </Text>
+                    </Pressable>
+                    <Pressable
+                        onPress={() => router.push("/(hotel)/support")}
+                        style={[
+                            styles.secondaryAction,
+                            { backgroundColor: colors.paper, borderColor: colors.ink200 },
+                        ]}
                     >
-                        <View style={[styles.compactIconBox, { backgroundColor: '#F5F3FF' }]}>
-                            <Text style={styles.compactEmoji}>📅</Text>
-                        </View>
-                        <Text style={styles.compactActionTitle}>Planning</Text>
-                        <Text style={styles.compactActionSubtitle}>Collectes</Text>
-                    </TouchableOpacity>
+                        <Icon name="msg" size={16} color={colors.ink700} />
+                        <Text style={[styles.secondaryActionText, { color: colors.ink800 }]}>
+                            Support
+                        </Text>
+                    </Pressable>
                 </View>
-            </View>
 
-            {/* Recent Orders */}
-            <View style={styles.popularSection}>
-                <View style={styles.sectionHeader}>
-                    <ThemedText variate="subtitle1" color="textPrimary">
+                {/* Recent orders */}
+                <View style={styles.recentHeader}>
+                    <ThemedText variate="caps" color="ink500">
                         Commandes récentes
                     </ThemedText>
-                    <TouchableOpacity onPress={() => router.push('/(hotel)/orders')}>
-                        <Text style={[styles.seeAllButton, { color: colors.hotelPrimary }]}>
-                            Voir tout →
-                        </Text>
-                    </TouchableOpacity>
+                    <Pressable onPress={() => router.push("/(hotel)/orders")}>
+                        <Text style={[styles.seeAll, { color: colors.brand700 }]}>Tout voir →</Text>
+                    </Pressable>
                 </View>
 
-                <View style={styles.ordersContainer}>
-                    {orders.slice(0, 3).map((order) => {
-                        // Calculer le nombre total d'articles
-                        let totalItems = 0;
-                        if (order.services && Array.isArray(order.services)) {
-                            if (order.services.length > 0 && order.services[0].items) {
-                                totalItems = order.services.reduce((total, service) => {
-                                    return total + (service.items?.reduce((sum, item) => sum + item.quantity, 0) || 0);
-                                }, 0);
-                            } else {
-                                totalItems = order.services.length;
-                            }
-                        }
-
-                        // Couleur selon le statut
-                        const getStatusColor = (status: string) => {
-                            switch (status) {
-                                case 'delivered': return '#10B981';
-                                case 'pending': return '#F59E0B';
-                                case 'confirmed': return '#3B82F6';
-                                case 'in_progress': return '#8B5CF6';
-                                case 'collected': return '#6366F1';
-                                default: return '#6B7280';
-                            }
-                        };
-
-                        const getStatusLabel = (status: string) => {
-                            switch (status) {
-                                case 'delivered': return 'Livrée';
-                                case 'pending': return 'En attente';
-                                case 'confirmed': return 'Confirmée';
-                                case 'in_progress': return 'En cours';
-                                case 'collected': return 'Collectée';
-                                default: return status;
-                            }
-                        };
-
-                        return (
-                            <TouchableOpacity
-                                key={order.id}
-                                style={styles.modernOrderCard}
-                                onPress={() => router.push({
-                                    pathname: '/(hotel)/order-details',
-                                    params: { id: order.id },
-                                })}
-                                activeOpacity={0.85}
+                <View style={styles.ordersList}>
+                    {recentOrders.length === 0 ? (
+                        <Card padding={16}>
+                            <ThemedText variate="caption" color="ink500">
+                                Aucune commande récente. Créez votre première commande.
+                            </ThemedText>
+                        </Card>
+                    ) : (
+                        recentOrders.map((o) => (
+                            <Pressable
+                                key={o.id}
+                                onPress={() =>
+                                    router.push({
+                                        pathname: "/(hotel)/order-details",
+                                        params: { id: o.id },
+                                    })
+                                }
                             >
-                                <View style={styles.orderCardLeft}>
-                                    <View style={[styles.orderStatusDot, { backgroundColor: getStatusColor(order.status) }]} />
-                                    <View style={styles.orderCardInfo}>
-                                        <Text style={styles.orderNumber}>{order.orderNumber}</Text>
-                                        <Text style={styles.orderDate}>
-                                            {new Date(order.createdAt).toLocaleDateString('fr-FR', {
-                                                day: 'numeric',
-                                                month: 'short'
-                                            })}
-                                        </Text>
+                                <Card padding={12}>
+                                    <View style={styles.orderRow}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text
+                                                style={[styles.orderCode, { color: colors.ink500 }]}
+                                            >
+                                                {o.orderNumber}
+                                            </Text>
+                                            <Text
+                                                style={[styles.orderDate, { color: colors.ink800 }]}
+                                            >
+                                                {formatDate(o.createdAt)}
+                                            </Text>
+                                            <Text
+                                                style={[styles.orderMeta, { color: colors.ink600 }]}
+                                            >
+                                                <Text style={styles.mono}>{countItems(o)}</Text>{" "}
+                                                pièces ·{" "}
+                                                <Text style={styles.mono}>
+                                                    {(o.actualWeight ?? countItems(o) * 0.3)
+                                                        .toFixed(1)
+                                                        .replace(".", ",")}
+                                                </Text>{" "}
+                                                kg est.
+                                            </Text>
+                                        </View>
+                                        <View style={styles.orderRight}>
+                                            <StatusBadge
+                                                status={STATUS_TO_LABEL[o.status] ?? "Créée"}
+                                            />
+                                            <Icon
+                                                name="chevRight"
+                                                size={14}
+                                                color={colors.ink400}
+                                            />
+                                        </View>
                                     </View>
-                                </View>
-
-                                <View style={styles.orderCardRight}>
-                                    <View style={styles.orderItemsBox}>
-                                        <Text style={styles.orderItemsCount}>{totalItems > 0 ? totalItems : '-'}</Text>
-                                        <Text style={styles.orderItemsLabel}>articles</Text>
-                                    </View>
-                                    <View style={[styles.orderStatusBadge, { backgroundColor: getStatusColor(order.status) + '15' }]}>
-                                        <Text style={[styles.orderStatusText, { color: getStatusColor(order.status) }]}>
-                                            {getStatusLabel(order.status)}
-                                        </Text>
-                                    </View>
-                                </View>
-                            </TouchableOpacity>
-                        );
-                    })}
+                                </Card>
+                            </Pressable>
+                        ))
+                    )}
                 </View>
-            </View>
+            </ScrollView>
 
-            {/* Drawer Menu */}
+            {/* SOS floating */}
+            <TouchableOpacity
+                activeOpacity={0.88}
+                style={[styles.sos, { backgroundColor: colors.terra700 }]}
+                onPress={() => router.push("/(hotel)/support")}
+            >
+                <Icon name="msg" size={22} color={colors.paper} stroke={1.8} />
+            </TouchableOpacity>
+
             <DrawerMenu
                 visible={drawerVisible}
                 onClose={() => setDrawerVisible(false)}
             />
-            </ScrollView>
         </SafeAreaView>
     );
 }
 
+function StatCard({
+    icon,
+    iconBg,
+    iconFg,
+    value,
+    label,
+}: {
+    icon: IconName;
+    iconBg: string;
+    iconFg: string;
+    value: number;
+    label: string;
+}) {
+    return (
+        <Card padding={12} style={{ flex: 1 }}>
+            <View style={styles.statHeader}>
+                <View style={[styles.statIconBox, { backgroundColor: iconBg }]}>
+                    <Icon name={icon} size={14} color={iconFg} />
+                </View>
+                <Text style={styles.statValue}>{value}</Text>
+            </View>
+            <Text style={styles.statLabel}>{label}</Text>
+        </Card>
+    );
+}
+
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
+    container: { flex: 1 },
+
+    // Top bar
+    topBar: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderBottomWidth: StyleSheet.hairlineWidth,
     },
-    content: {
-        padding: Spacing.padding.screen,
-        paddingBottom: 100, // Espace pour la navigation flottante
+    avatar: {
+        width: 38,
+        height: 38,
+        borderRadius: 99,
+        alignItems: "center",
+        justifyContent: "center",
     },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingTop: Spacing.sm,
-        marginBottom: Spacing.xl,
+    avatarText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.md,
     },
-    iconButton: {
-        width: 40,
-        height: 40,
-        justifyContent: 'center',
-        alignItems: 'center',
-        position: 'relative',
+    topTitle: { flex: 1 },
+    topSub: { marginTop: 2 },
+    iconChip: {
+        width: 34,
+        height: 34,
+        borderRadius: 99,
+        alignItems: "center",
+        justifyContent: "center",
+        position: "relative",
     },
-    headerRight: {
-        flexDirection: 'row',
-        gap: Spacing.sm,
-    },
-    menuIcon: {
-        fontSize: 28,
-        color: '#374151',
-    },
-    iconText: {
-        fontSize: 24,
-    },
-    badge: {
-        position: 'absolute',
+    notifDot: {
+        position: "absolute",
         top: 8,
         right: 8,
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: '#3B82F6',
+        width: 6,
+        height: 6,
+        borderRadius: 99,
     },
-    questionSection: {
-        marginBottom: Spacing.xl,
+
+    content: {
+        padding: 16,
+        paddingBottom: 120,
     },
-    mainQuestion: {
-        fontSize: 28,
+
+    // Hero
+    hero: {
+        borderRadius: 18,
+        padding: 18,
+        marginBottom: 14,
+        overflow: "hidden",
+    },
+    heroBlob: {
+        position: "absolute",
+        right: -40,
+        top: -40,
+        width: 140,
+        height: 140,
+        borderRadius: 99,
+    },
+    heroCaps: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.micro,
+        letterSpacing: Typography.letterSpacing.wide,
+        textTransform: "uppercase",
+    },
+    heroAmountRow: {
+        flexDirection: "row",
+        alignItems: "baseline",
+        marginTop: 6,
+        gap: 6,
+    },
+    heroAmount: {
+        fontFamily: FontFamily.serifMedium,
+        fontSize: 34,
         lineHeight: 36,
+        letterSpacing: -0.5,
     },
-    servicesScroll: {
-        marginBottom: Spacing.xl,
+    heroCurrency: {
+        fontFamily: FontFamily.serifMedium,
+        fontSize: 16,
     },
-    servicesContent: {
-        gap: Spacing.md,
+    heroMetrics: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 18,
+        marginTop: 14,
     },
-    serviceCard: {
-        alignItems: 'center',
-        width: 110,
+    heroDivider: {
+        width: StyleSheet.hairlineWidth,
+        height: 32,
     },
-    serviceIconContainer: {
-        width: 80,
-        height: 80,
-        borderRadius: Spacing.borderRadius.lg,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: Spacing.sm,
+    heroMetricValue: {
+        fontFamily: FontFamily.monoMedium,
+        fontSize: Typography.fontSize.xl,
     },
-    serviceIconLarge: {
-        fontSize: 36,
+    heroMetricUnit: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
     },
-    serviceLabel: {
-        textAlign: 'center',
-        fontSize: Typography.fontSize.xs,
+    heroMetricLabel: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
+        marginTop: 2,
     },
-    promoBanner: {
-        flexDirection: 'row',
-        backgroundColor: '#EFF6FF',
-        padding: Spacing.lg,
-        borderRadius: Spacing.borderRadius.lg,
-        marginBottom: Spacing.md,
-        alignItems: 'center',
+
+    // Stat cards
+    statsRow: {
+        flexDirection: "row",
+        gap: 10,
+        marginBottom: 16,
     },
-    promoIcon: {
-        marginLeft: Spacing.md,
+    statHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
     },
-    paginationDots: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        gap: Spacing.xs,
-        marginBottom: Spacing.xl,
+    statIconBox: {
+        width: 28,
+        height: 28,
+        borderRadius: 8,
+        alignItems: "center",
+        justifyContent: "center",
     },
-    dot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
+    statValue: {
+        fontFamily: FontFamily.monoMedium,
+        fontSize: Typography.fontSize.xxl,
     },
-    quickActionsSection: {
-        marginBottom: Spacing.xl,
+    statLabel: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 6,
+        color: "#807A6F",
     },
-    sectionTitle: {
-        marginBottom: Spacing.md,
+
+    // Sections
+    sectionLabel: {
+        marginBottom: 8,
+        paddingLeft: 2,
     },
-    mainActionCard: {
-        borderRadius: Spacing.borderRadius.xl,
-        padding: Spacing.xl,
-        marginBottom: Spacing.md,
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 3,
-        },
-        shadowOpacity: 0.12,
-        shadowRadius: 10,
-        elevation: 4,
+
+    // Actions row
+    actionsRow: {
+        flexDirection: "row",
+        gap: 8,
+        marginBottom: 18,
     },
-    mainActionContent: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+    primaryAction: {
+        flex: 2,
+        padding: 14,
+        borderRadius: 12,
+        alignItems: "flex-start",
+        gap: 4,
     },
-    mainActionTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: '#FFFFFF',
-        marginBottom: 4,
+    primaryActionText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
     },
-    mainActionSubtitle: {
-        fontSize: 13,
-        color: 'rgba(255, 255, 255, 0.85)',
-        fontWeight: '400',
-    },
-    mainActionIcon: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        backgroundColor: 'rgba(255, 255, 255, 0.15)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    mainActionEmoji: {
-        fontSize: 30,
-    },
-    quickActionsGrid: {
-        flexDirection: 'row',
-        gap: Spacing.md,
-    },
-    compactActionCard: {
+    secondaryAction: {
         flex: 1,
-        backgroundColor: '#FFFFFF',
-        borderRadius: Spacing.borderRadius.lg,
-        padding: Spacing.md,
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        elevation: 2,
+        padding: 14,
+        borderRadius: 12,
+        borderWidth: StyleSheet.hairlineWidth,
+        alignItems: "flex-start",
+        gap: 4,
     },
-    compactIconBox: {
-        width: 56,
-        height: 56,
-        borderRadius: Spacing.borderRadius.lg,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: Spacing.sm,
+    secondaryActionText: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.tiny,
     },
-    compactEmoji: {
-        fontSize: 28,
+
+    // Recent orders
+    recentHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "baseline",
+        marginBottom: 8,
     },
-    compactActionTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#1F2937',
-        marginBottom: 2,
+    seeAll: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.tiny,
     },
-    compactActionSubtitle: {
-        fontSize: 11,
-        color: '#6B7280',
-        fontWeight: '400',
+    ordersList: { gap: 8 },
+    orderRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "flex-start",
     },
-    popularSection: {
-        marginBottom: Spacing.xl,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: Spacing.md,
-    },
-    seeAllButton: {
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    ordersContainer: {
-        gap: Spacing.sm,
-    },
-    modernOrderCard: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        backgroundColor: '#FFFFFF',
-        borderRadius: Spacing.borderRadius.lg,
-        padding: Spacing.md,
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-        elevation: 2,
-        marginBottom: Spacing.xs,
-    },
-    orderCardLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-    },
-    orderStatusDot: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-        marginRight: Spacing.md,
-    },
-    orderCardInfo: {
-        flex: 1,
-    },
-    orderNumber: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: '#1F2937',
-        marginBottom: 2,
+    orderCode: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.tiny,
     },
     orderDate: {
-        fontSize: 12,
-        color: '#9CA3AF',
-        fontWeight: '400',
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.sm,
+        marginTop: 4,
     },
-    orderCardRight: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.md,
+    orderMeta: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 4,
     },
-    orderItemsBox: {
-        alignItems: 'center',
-        minWidth: 50,
+    mono: { fontFamily: FontFamily.monoRegular },
+    orderRight: {
+        alignItems: "flex-end",
+        gap: 10,
     },
-    orderItemsCount: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#1F2937',
-    },
-    orderItemsLabel: {
-        fontSize: 10,
-        color: '#9CA3AF',
-        fontWeight: '500',
-    },
-    orderStatusBadge: {
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: 4,
-        borderRadius: Spacing.borderRadius.md,
-    },
-    orderStatusText: {
-        fontSize: 11,
-        fontWeight: '600',
+
+    // SOS
+    sos: {
+        position: "absolute",
+        bottom: 100,
+        right: 16,
+        width: 52,
+        height: 52,
+        borderRadius: 99,
+        alignItems: "center",
+        justifyContent: "center",
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.2,
+        shadowRadius: 16,
+        elevation: 6,
     },
 });
