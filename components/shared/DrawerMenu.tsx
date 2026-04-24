@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
     Animated,
     Dimensions,
@@ -42,8 +42,7 @@ const HOTEL_MENU: MenuEntry[] = [
 
 const DRIVER_MENU: MenuEntry[] = [
     { id: "route", label: "Ma tournée", icon: "route", route: "/(driver)/route" },
-    { id: "scan", label: "Scanner un client", icon: "qr", route: "/(driver)/scan" },
-    { id: "collect", label: "Collecte", icon: "package", route: "/(driver)/collect" },
+    { id: "collect", label: "Collecte · Scan QR", icon: "qr", route: "/(driver)/collect" },
     { id: "delivery", label: "Livraison", icon: "truck", route: "/(driver)/delivery" },
     { id: "navigation", label: "Navigation", icon: "map", route: "/(driver)/navigation" },
     { id: "messages", label: "Messages", icon: "msg", route: "/(driver)/messages" },
@@ -66,22 +65,28 @@ export default function DrawerMenu({ visible, onClose }: DrawerMenuProps) {
     const { user, logout } = useAuth();
     const colors = useThemeColors();
 
+    // Keep Modal mounted through the close animation
+    const [rendered, setRendered] = useState(visible);
+
     const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
     const overlayOpacity = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
         if (visible) {
+            setRendered(true);
             Animated.parallel([
-                Animated.timing(translateX, {
+                Animated.spring(translateX, {
                     toValue: 0,
-                    duration: 260,
-                    easing: Easing.out(Easing.cubic),
+                    damping: 22,
+                    stiffness: 220,
+                    mass: 0.9,
+                    overshootClamping: true,
                     useNativeDriver: true,
                 }),
                 Animated.timing(overlayOpacity, {
                     toValue: 1,
-                    duration: 260,
-                    easing: Easing.out(Easing.cubic),
+                    duration: 220,
+                    easing: Easing.out(Easing.quad),
                     useNativeDriver: true,
                 }),
             ]).start();
@@ -89,7 +94,7 @@ export default function DrawerMenu({ visible, onClose }: DrawerMenuProps) {
             Animated.parallel([
                 Animated.timing(translateX, {
                     toValue: -DRAWER_WIDTH,
-                    duration: 200,
+                    duration: 220,
                     easing: Easing.in(Easing.cubic),
                     useNativeDriver: true,
                 }),
@@ -99,7 +104,9 @@ export default function DrawerMenu({ visible, onClose }: DrawerMenuProps) {
                     easing: Easing.in(Easing.cubic),
                     useNativeDriver: true,
                 }),
-            ]).start();
+            ]).start(({ finished }) => {
+                if (finished) setRendered(false);
+            });
         }
     }, [visible, translateX, overlayOpacity]);
 
@@ -116,10 +123,8 @@ export default function DrawerMenu({ visible, onClose }: DrawerMenuProps) {
             .toUpperCase() || "U";
 
     const handleNavigate = (route: string) => {
+        router.push(route as never);
         onClose();
-        setTimeout(() => {
-            router.push(route as never);
-        }, 180);
     };
 
     const handleLogout = async () => {
@@ -137,11 +142,12 @@ export default function DrawerMenu({ visible, onClose }: DrawerMenuProps) {
 
     return (
         <Modal
-            visible={visible}
+            visible={rendered}
             transparent
             animationType="none"
             onRequestClose={onClose}
             statusBarTranslucent
+            hardwareAccelerated
         >
             <View style={styles.root}>
                 <Animated.View

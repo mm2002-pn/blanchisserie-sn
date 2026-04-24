@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
+    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -9,6 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import MapView, { Marker, PROVIDER_DEFAULT, Polyline, Region } from "react-native-maps";
 
 import Card from "@/components/ui/Card";
 import Icon, { IconName } from "@/components/ui/Icon";
@@ -27,6 +29,18 @@ type RouteStop = {
     estimatedTime: string;
     status: StopStatus;
     type: StopType;
+    lat: number;
+    lng: number;
+};
+
+/** Position de départ (atelier Dakar Nord) */
+const DRIVER_ORIGIN = { latitude: 14.7558, longitude: -17.4440 };
+
+const DAKAR_REGION: Region = {
+    latitude: 14.7100,
+    longitude: -17.4600,
+    latitudeDelta: 0.10,
+    longitudeDelta: 0.08,
 };
 
 export default function NavigationScreen() {
@@ -45,6 +59,8 @@ export default function NavigationScreen() {
             estimatedTime: "2 min",
             status: "current",
             type: "collecte",
+            lat: 14.7087,
+            lng: -17.4870,
         },
         {
             id: "2",
@@ -54,6 +70,8 @@ export default function NavigationScreen() {
             estimatedTime: "12 min",
             status: "upcoming",
             type: "livraison",
+            lat: 14.6956,
+            lng: -17.4541,
         },
         {
             id: "3",
@@ -63,8 +81,20 @@ export default function NavigationScreen() {
             estimatedTime: "18 min",
             status: "upcoming",
             type: "collecte",
+            lat: 14.7125,
+            lng: -17.4840,
         },
     ];
+
+    const mapRef = useRef<MapView | null>(null);
+    const polylineCoords = [
+        DRIVER_ORIGIN,
+        ...routeStops.map((s) => ({ latitude: s.lat, longitude: s.lng })),
+    ];
+
+    const recenter = () => {
+        mapRef.current?.animateToRegion(DAKAR_REGION, 450);
+    };
 
     const currentStop = routeStops.find((s) => s.status === "current");
     const totalDistance = "24,5 km";
@@ -94,32 +124,122 @@ export default function NavigationScreen() {
                 contentContainerStyle={styles.content}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Map placeholder */}
+                {/* Map */}
                 <Card padding={0} style={[styles.mapCard, { overflow: "hidden" }]}>
-                    <View
-                        style={[
-                            styles.mapPlaceholder,
-                            { backgroundColor: colors.paper2 },
-                        ]}
-                    >
-                        <Icon name="map" size={48} color={colors.ink400} />
-                        <Text
-                            style={[styles.mapTitle, { color: colors.ink700 }]}
+                    {Platform.OS === "web" ? (
+                        <View
+                            style={[
+                                styles.mapPlaceholder,
+                                { backgroundColor: colors.paper2 },
+                            ]}
                         >
-                            Carte interactive
-                        </Text>
-                        <Text
-                            style={[styles.mapSub, { color: colors.ink500 }]}
-                        >
-                            Leaflet.js · à intégrer
-                        </Text>
-
-                        <View style={styles.mapControls}>
-                            <MapControl icon="search" />
-                            <MapControl icon="plus" />
-                            <MapControl icon="minus" />
+                            <Icon name="map" size={40} color={colors.ink400} />
+                            <Text style={[styles.mapTitle, { color: colors.ink700 }]}>
+                                Carte disponible sur mobile
+                            </Text>
+                            <Text style={[styles.mapSub, { color: colors.ink500 }]}>
+                                react-native-maps · iOS · Android
+                            </Text>
                         </View>
-                    </View>
+                    ) : (
+                        <View style={styles.mapWrap}>
+                            <MapView
+                                ref={mapRef}
+                                provider={PROVIDER_DEFAULT}
+                                style={StyleSheet.absoluteFill}
+                                initialRegion={DAKAR_REGION}
+                                showsUserLocation
+                                showsMyLocationButton={false}
+                                showsCompass={false}
+                                showsScale={false}
+                                toolbarEnabled={false}
+                            >
+                                {/* Driver origin */}
+                                <Marker
+                                    coordinate={DRIVER_ORIGIN}
+                                    title="Atelier Dakar"
+                                    description="Point de départ"
+                                >
+                                    <View
+                                        style={[
+                                            styles.originMarker,
+                                            { backgroundColor: colors.ink900, borderColor: colors.paper },
+                                        ]}
+                                    >
+                                        <Icon name="truck" size={12} color={colors.paper} />
+                                    </View>
+                                </Marker>
+
+                                {/* Route stops */}
+                                {routeStops.map((stop, i) => {
+                                    const bg =
+                                        stop.status === "completed"
+                                            ? colors.ok600
+                                            : stop.status === "current"
+                                              ? colors.terra600
+                                              : colors.brand800;
+                                    return (
+                                        <Marker
+                                            key={stop.id}
+                                            coordinate={{
+                                                latitude: stop.lat,
+                                                longitude: stop.lng,
+                                            }}
+                                            title={stop.name}
+                                            description={`${stop.type === "collecte" ? "Collecte" : "Livraison"} · ${stop.distance}`}
+                                        >
+                                            <View
+                                                style={[
+                                                    styles.stopMarker,
+                                                    {
+                                                        backgroundColor: bg,
+                                                        borderColor: colors.paper,
+                                                    },
+                                                ]}
+                                            >
+                                                <Text
+                                                    style={[
+                                                        styles.stopMarkerText,
+                                                        { color: colors.paper },
+                                                    ]}
+                                                >
+                                                    {i + 1}
+                                                </Text>
+                                            </View>
+                                        </Marker>
+                                    );
+                                })}
+
+                                {/* Polyline linking stops */}
+                                <Polyline
+                                    coordinates={polylineCoords}
+                                    strokeColor={colors.brand800}
+                                    strokeWidth={3}
+                                    lineDashPattern={[6, 4]}
+                                />
+                            </MapView>
+
+                            <View style={styles.mapControls}>
+                                <MapControl icon="plus" onPress={() => {
+                                    mapRef.current?.getCamera().then((cam) => {
+                                        mapRef.current?.animateCamera(
+                                            { zoom: (cam.zoom ?? 13) + 1 },
+                                            { duration: 250 },
+                                        );
+                                    });
+                                }} />
+                                <MapControl icon="minus" onPress={() => {
+                                    mapRef.current?.getCamera().then((cam) => {
+                                        mapRef.current?.animateCamera(
+                                            { zoom: (cam.zoom ?? 13) - 1 },
+                                            { duration: 250 },
+                                        );
+                                    });
+                                }} />
+                                <MapControl icon="search" onPress={recenter} />
+                            </View>
+                        </View>
+                    )}
                 </Card>
 
                 {/* Current destination */}
@@ -278,10 +398,17 @@ export default function NavigationScreen() {
 
 /* ---------- sous-composants ---------- */
 
-function MapControl({ icon }: { icon: IconName }) {
+function MapControl({
+    icon,
+    onPress,
+}: {
+    icon: IconName;
+    onPress?: () => void;
+}) {
     const colors = useThemeColors();
     return (
         <Pressable
+            onPress={onPress}
             style={[
                 styles.mapCtl,
                 { backgroundColor: colors.paper, borderColor: colors.ink200 },
@@ -495,6 +622,10 @@ const styles = StyleSheet.create({
 
     // Map
     mapCard: { marginBottom: 14 },
+    mapWrap: {
+        height: 280,
+        position: "relative",
+    },
     mapPlaceholder: {
         height: 240,
         alignItems: "center",
@@ -522,6 +653,26 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "center",
         borderWidth: StyleSheet.hairlineWidth,
+    },
+    originMarker: {
+        width: 28,
+        height: 28,
+        borderRadius: 8,
+        alignItems: "center",
+        justifyContent: "center",
+        borderWidth: 2,
+    },
+    stopMarker: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        alignItems: "center",
+        justifyContent: "center",
+        borderWidth: 2,
+    },
+    stopMarkerText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.tiny,
     },
 
     // Current card

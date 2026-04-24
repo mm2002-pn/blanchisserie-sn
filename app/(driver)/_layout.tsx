@@ -74,7 +74,6 @@ export default function DriverLayout() {
             />
 
             <Tabs.Screen name="navigation" options={{ href: null, title: "Navigation" }} />
-            <Tabs.Screen name="scan" options={{ href: null, title: "Scanner" }} />
         </Tabs>
     );
 }
