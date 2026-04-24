@@ -1,1165 +1,1620 @@
-import React, { useState } from 'react';
+import { useState } from "react";
 import {
-    View,
-    Text,
-    StyleSheet,
-    ScrollView,
-    TouchableOpacity,
-    SafeAreaView,
     Alert,
-} from 'react-native';
-import { useThemeColors } from '@/hooks/useThemeColors';
-import Card from '@/components/ui/Card';
-import ThemedText from '@/components/ui/ThemedText';
-import Button from '@/components/ui/Button';
-import { Spacing } from '@/constants/Spacing';
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+import Card from "@/components/ui/Card";
+import Icon, { IconName } from "@/components/ui/Icon";
+import StatusBadge from "@/components/ui/StatusBadge";
+import ThemedText from "@/components/ui/ThemedText";
+import { FontFamily, Typography } from "@/constants/Typography";
+import { useThemeColors } from "@/hooks/useThemeColors";
 
 type WorkflowStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
-const WORKFLOW_STEPS = [
-    { step: 1, label: 'COMMANDES', icon: '📦', color: '#2196F3' },
-    { step: 2, label: 'PESÉE', icon: '⚖️', color: '#9C27B0' },
-    { step: 3, label: 'VÉRIFICATION', icon: '✂️', color: '#FF9800' },
-    { step: 4, label: 'LAVAGE', icon: '💧', color: '#00BCD4' },
-    { step: 5, label: 'SÉCHAGE', icon: '🌬️', color: '#4CAF50' },
-    { step: 6, label: 'CALANDRAGE', icon: '✨', color: '#E91E63' },
-    { step: 7, label: 'PRÉPARATION', icon: '📋', color: '#795548' },
+const WORKFLOW: { step: WorkflowStep; label: string; icon: IconName }[] = [
+    { step: 1, label: "Commandes", icon: "boxes" },
+    { step: 2, label: "Pesée", icon: "weight" },
+    { step: 3, label: "Vérification", icon: "check" },
+    { step: 4, label: "Lavage", icon: "droplet" },
+    { step: 5, label: "Séchage", icon: "thermo" },
+    { step: 6, label: "Calandrage", icon: "spark" },
+    { step: 7, label: "Préparation", icon: "list" },
 ];
+
+const formatCurrency = (n: number) => `${n.toLocaleString("fr-FR")} F CFA`;
 
 export default function SupervisorProductionScreen() {
     const colors = useThemeColors();
     const [currentStep, setCurrentStep] = useState<WorkflowStep>(1);
 
-    const handleStepPress = (step: WorkflowStep) => {
-        setCurrentStep(step);
-    };
-
-    const renderStepContent = () => {
-        switch (currentStep) {
-            case 1:
-                return <CommandesStep colors={colors} onNext={() => setCurrentStep(2)} />;
-            case 2:
-                return <PeseeStep colors={colors} onNext={() => setCurrentStep(3)} onBack={() => setCurrentStep(1)} />;
-            case 3:
-                return <VerificationStep colors={colors} onNext={() => setCurrentStep(4)} onBack={() => setCurrentStep(2)} />;
-            case 4:
-                return <LavageStep colors={colors} onNext={() => setCurrentStep(5)} onBack={() => setCurrentStep(3)} />;
-            case 5:
-                return <SechageStep colors={colors} onNext={() => setCurrentStep(6)} onBack={() => setCurrentStep(4)} />;
-            case 6:
-                return <CalandrageStep colors={colors} onNext={() => setCurrentStep(7)} onBack={() => setCurrentStep(5)} />;
-            case 7:
-                return <PreparationStep colors={colors} onBack={() => setCurrentStep(6)} />;
-            default:
-                return null;
-        }
-    };
-
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            {/* Progress Bar */}
-            <View style={styles.progressBar}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    {WORKFLOW_STEPS.map((item, index) => {
-                        const isActive = currentStep === item.step;
-                        const isCompleted = currentStep > item.step;
+        <SafeAreaView
+            edges={["top"]}
+            style={[styles.container, { backgroundColor: colors.paper2 }]}
+        >
+            <View
+                style={[
+                    styles.header,
+                    { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
+                ]}
+            >
+                <ThemedText variate="title">Production</ThemedText>
+                <Text style={[styles.headerSub, { color: colors.ink500 }]}>
+                    Atelier Dakar · Cycle du jour
+                </Text>
+            </View>
 
+            {/* Stepper */}
+            <View
+                style={[
+                    styles.stepperWrap,
+                    { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
+                ]}
+            >
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.stepperRow}
+                >
+                    {WORKFLOW.map((w) => {
+                        const isActive = currentStep === w.step;
+                        const isCompleted = currentStep > w.step;
+                        const isLocked = w.step > currentStep;
                         return (
-                            <TouchableOpacity
-                                key={item.step}
-                                style={styles.stepItem}
-                                onPress={() => handleStepPress(item.step)}
-                                disabled={item.step > currentStep}
+                            <Pressable
+                                key={w.step}
+                                onPress={() => !isLocked && setCurrentStep(w.step)}
+                                disabled={isLocked}
+                                style={styles.stepperItem}
                             >
                                 <View
                                     style={[
                                         styles.stepCircle,
                                         {
                                             backgroundColor: isCompleted
-                                                ? '#4CAF50'
+                                                ? colors.ok600
                                                 : isActive
-                                                ? item.color
-                                                : colors.border,
-                                            opacity: item.step > currentStep ? 0.3 : 1,
+                                                  ? colors.brand800
+                                                  : colors.ink100,
+                                            borderColor: isActive
+                                                ? colors.terra600
+                                                : "transparent",
+                                            borderWidth: isActive ? 2 : 0,
+                                            opacity: isLocked ? 0.5 : 1,
                                         },
                                     ]}
                                 >
-                                    <Text style={styles.stepIcon}>
-                                        {isCompleted ? '✓' : item.icon}
-                                    </Text>
+                                    {isCompleted ? (
+                                        <Icon name="check" size={14} color={colors.paper} />
+                                    ) : (
+                                        <Icon
+                                            name={w.icon}
+                                            size={14}
+                                            color={isActive ? colors.paper : colors.ink500}
+                                        />
+                                    )}
                                 </View>
                                 <Text
                                     style={[
                                         styles.stepLabel,
                                         {
-                                            color: isActive ? item.color : colors.textSecondary,
-                                            fontWeight: isActive ? 'bold' : 'normal',
+                                            color: isActive
+                                                ? colors.brand800
+                                                : isCompleted
+                                                  ? colors.ok700
+                                                  : colors.ink500,
+                                            opacity: isLocked ? 0.5 : 1,
                                         },
                                     ]}
                                 >
-                                    {item.label}
+                                    {w.label}
                                 </Text>
-                                {index < WORKFLOW_STEPS.length - 1 && (
-                                    <View
-                                        style={[
-                                            styles.stepLine,
-                                            {
-                                                backgroundColor: isCompleted
-                                                    ? '#4CAF50'
-                                                    : colors.border,
-                                            },
-                                        ]}
-                                    />
-                                )}
-                            </TouchableOpacity>
+                                <Text
+                                    style={[
+                                        styles.stepIndex,
+                                        {
+                                            color: isActive
+                                                ? colors.brand800
+                                                : colors.ink400,
+                                        },
+                                    ]}
+                                >
+                                    {w.step.toString().padStart(2, "0")}
+                                </Text>
+                            </Pressable>
                         );
                     })}
                 </ScrollView>
             </View>
 
-            {/* Step Content */}
-            <ScrollView style={styles.content}>
-                {renderStepContent()}
+            <ScrollView
+                contentContainerStyle={styles.content}
+                showsVerticalScrollIndicator={false}
+            >
+                {currentStep === 1 && (
+                    <CommandesStep onNext={() => setCurrentStep(2)} />
+                )}
+                {currentStep === 2 && (
+                    <PeseeStep
+                        onNext={() => setCurrentStep(3)}
+                        onBack={() => setCurrentStep(1)}
+                    />
+                )}
+                {currentStep === 3 && (
+                    <VerificationStep
+                        onNext={() => setCurrentStep(4)}
+                        onBack={() => setCurrentStep(2)}
+                    />
+                )}
+                {currentStep === 4 && (
+                    <DispatchStep
+                        kind="lavage"
+                        onNext={() => setCurrentStep(5)}
+                        onBack={() => setCurrentStep(3)}
+                    />
+                )}
+                {currentStep === 5 && (
+                    <DispatchStep
+                        kind="sechage"
+                        onNext={() => setCurrentStep(6)}
+                        onBack={() => setCurrentStep(4)}
+                    />
+                )}
+                {currentStep === 6 && (
+                    <DispatchStep
+                        kind="calandrage"
+                        onNext={() => setCurrentStep(7)}
+                        onBack={() => setCurrentStep(5)}
+                    />
+                )}
+                {currentStep === 7 && (
+                    <PreparationStep onBack={() => setCurrentStep(6)} />
+                )}
             </ScrollView>
         </SafeAreaView>
     );
 }
 
-// STEP 1: COMMANDES
-function CommandesStep({ colors, onNext }: any) {
-    const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+/* ---------- STEP 1 : COMMANDES ---------- */
 
-    const mockOrders = [
-        { id: '1', client: 'Hôtel Plaza', items: 130, date: '04/01/2026' },
-        { id: '2', client: 'Hôtel Savana', items: 53, date: '04/01/2026' },
-        { id: '3', client: 'Hôtel Teranga', items: 235, date: '04/01/2026' },
+function CommandesStep({ onNext }: { onNext: () => void }) {
+    const colors = useThemeColors();
+    const [selected, setSelected] = useState<string[]>([]);
+
+    const orders = [
+        { id: "1", client: "Hôtel Plaza", items: 130, weight: "67,5 kg", date: "04/01/2026" },
+        { id: "2", client: "Hôtel Savana", items: 53, weight: "42,8 kg", date: "04/01/2026" },
+        { id: "3", client: "Hôtel Teranga", items: 235, weight: "157 kg", date: "04/01/2026" },
     ];
 
-    const toggleOrder = (id: string) => {
-        if (selectedOrders.includes(id)) {
-            setSelectedOrders(selectedOrders.filter(orderId => orderId !== id));
-        } else {
-            setSelectedOrders([...selectedOrders, id]);
-        }
-    };
+    const toggle = (id: string) =>
+        setSelected((prev) =>
+            prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+        );
 
     return (
-        <View style={{ padding: Spacing.md }}>
-            <Card>
-                <ThemedText variate="headline" color="textPrimary" style={{ marginBottom: 8 }}>
-                    Sélection des commandes
-                </ThemedText>
-                <ThemedText variate="body2" color="textSecondary" style={{ marginBottom: 16 }}>
-                    Commandes collectées aujourd'hui
-                </ThemedText>
+        <>
+            <StepHeader
+                caps="Étape 1 · Commandes"
+                title="Sélection des commandes"
+                subtitle="Commandes collectées à intégrer dans le cycle du jour"
+            />
 
-                {mockOrders.map(order => (
-                    <TouchableOpacity
-                        key={order.id}
-                        style={[
-                            styles.orderCard,
-                            {
-                                backgroundColor: selectedOrders.includes(order.id)
-                                    ? '#E3F2FD'
-                                    : colors.cardBackground,
-                                borderColor: selectedOrders.includes(order.id)
-                                    ? '#2196F3'
-                                    : colors.border,
-                            },
-                        ]}
-                        onPress={() => toggleOrder(order.id)}
-                    >
-                        <View style={styles.orderHeader}>
-                            <View style={styles.checkbox}>
-                                {selectedOrders.includes(order.id) && (
-                                    <Text style={{ fontSize: 18 }}>✓</Text>
+            <View style={{ gap: 10, marginTop: 14 }}>
+                {orders.map((o) => {
+                    const picked = selected.includes(o.id);
+                    return (
+                        <Pressable
+                            key={o.id}
+                            onPress={() => toggle(o.id)}
+                            style={[
+                                styles.pickRow,
+                                {
+                                    backgroundColor: picked ? colors.brand100 : colors.paper,
+                                    borderColor: picked ? colors.brand800 : colors.ink200,
+                                    borderWidth: picked ? 1.5 : StyleSheet.hairlineWidth,
+                                },
+                            ]}
+                        >
+                            <View
+                                style={[
+                                    styles.checkbox,
+                                    {
+                                        backgroundColor: picked
+                                            ? colors.brand800
+                                            : "transparent",
+                                        borderColor: picked ? colors.brand800 : colors.ink300,
+                                    },
+                                ]}
+                            >
+                                {picked && (
+                                    <Icon name="check" size={12} color={colors.paper} />
                                 )}
                             </View>
                             <View style={{ flex: 1 }}>
-                                <ThemedText variate="subtitle1" color="textPrimary">
-                                    {order.client}
-                                </ThemedText>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    {order.items} pièces • {order.date}
-                                </ThemedText>
+                                <Text
+                                    style={[styles.pickClient, { color: colors.ink900 }]}
+                                >
+                                    {o.client}
+                                </Text>
+                                <Text
+                                    style={[styles.pickMeta, { color: colors.ink500 }]}
+                                >
+                                    {o.items} pièces · {o.weight} · {o.date}
+                                </Text>
+                            </View>
+                            <Icon
+                                name="building"
+                                size={16}
+                                color={picked ? colors.brand800 : colors.ink500}
+                            />
+                        </Pressable>
+                    );
+                })}
+            </View>
+
+            <CtaRow
+                nextLabel={`Continuer · ${selected.length} sélectionnée${selected.length > 1 ? "s" : ""}`}
+                nextDisabled={selected.length === 0}
+                onNext={onNext}
+            />
+        </>
+    );
+}
+
+/* ---------- STEP 2 : PESÉE ---------- */
+
+function PeseeStep({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
+    const colors = useThemeColors();
+    const initial = [
+        { type: "Drap", quantity: 45, weight: 18.5 },
+        { type: "Taie", quantity: 30, weight: 6.2 },
+        { type: "Serviette", quantity: 35, weight: 21.0 },
+        { type: "Nappe", quantity: 15, weight: 19.0 },
+        { type: "Torchon", quantity: 5, weight: 2.8 },
+    ];
+    const [items, setItems] = useState(initial);
+
+    const updateWeight = (index: number, v: string) => {
+        setItems((prev) => {
+            const next = [...prev];
+            next[index] = { ...next[index], weight: parseFloat(v.replace(",", ".")) || 0 };
+            return next;
+        });
+    };
+
+    const totalWeight = items.reduce((s, i) => s + i.weight, 0);
+    const totalPieces = items.reduce((s, i) => s + i.quantity, 0);
+
+    return (
+        <>
+            <StepHeader
+                caps="Étape 2 · Pesée"
+                title="Pesée par type de linge"
+                subtitle="Relevez le poids réel de chaque catégorie"
+            />
+
+            {/* Client context */}
+            <Card
+                padding={14}
+                style={[
+                    styles.clientCtx,
+                    { backgroundColor: colors.brand100, borderColor: colors.brand100 },
+                ]}
+            >
+                <View style={styles.clientCtxRow}>
+                    <Icon name="building" size={14} color={colors.brand800} />
+                    <Text style={[styles.clientCtxName, { color: colors.ink900 }]}>
+                        Hôtel Plaza
+                    </Text>
+                </View>
+                <Text style={[styles.clientCtxSub, { color: colors.ink700 }]}>
+                    CMD-2026-001 · {totalPieces} pièces à peser
+                </Text>
+            </Card>
+
+            <Card padding={0} style={{ overflow: "hidden", marginBottom: 14 }}>
+                {items.map((item, i) => (
+                    <View
+                        key={item.type}
+                        style={[
+                            styles.weighingRow,
+                            i < items.length - 1 && {
+                                borderBottomColor: colors.ink200,
+                                borderBottomWidth: StyleSheet.hairlineWidth,
+                            },
+                        ]}
+                    >
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.weighType, { color: colors.ink900 }]}>
+                                {item.type}
+                            </Text>
+                            <Text style={[styles.weighQty, { color: colors.ink500 }]}>
+                                {item.quantity} pièces
+                            </Text>
+                        </View>
+                        <View
+                            style={[
+                                styles.weighInput,
+                                {
+                                    backgroundColor: colors.paper,
+                                    borderColor: colors.brand800,
+                                },
+                            ]}
+                        >
+                            <TextInput
+                                value={item.weight > 0 ? item.weight.toString() : ""}
+                                onChangeText={(v) => updateWeight(i, v)}
+                                keyboardType="decimal-pad"
+                                placeholder="0,0"
+                                placeholderTextColor={colors.ink400}
+                                style={[styles.weighInputText, { color: colors.ink900 }]}
+                            />
+                            <Text style={[styles.weighUnit, { color: colors.ink500 }]}>
+                                kg
+                            </Text>
+                        </View>
+                    </View>
+                ))}
+            </Card>
+
+            {/* Total card */}
+            <Card
+                padding={16}
+                style={[
+                    styles.totalCard,
+                    { backgroundColor: colors.brand900, borderColor: colors.brand900 },
+                ]}
+            >
+                <View style={{ flex: 1 }}>
+                    <Text style={[styles.totalCaps, { color: colors.brand100 }]}>
+                        Poids total relevé
+                    </Text>
+                    <Text style={[styles.totalPieces, { color: colors.brand100 }]}>
+                        {totalPieces} pièces
+                    </Text>
+                </View>
+                <Text style={[styles.totalValue, { color: colors.paper }]}>
+                    {totalWeight.toFixed(1)}
+                    <Text style={[styles.totalUnit, { color: colors.brand100 }]}>
+                        {" kg"}
+                    </Text>
+                </Text>
+            </Card>
+
+            <CtaRow nextLabel="Valider & continuer" onNext={onNext} onBack={onBack} />
+        </>
+    );
+}
+
+/* ---------- STEP 3 : VÉRIFICATION ---------- */
+
+function VerificationStep({
+    onNext,
+    onBack,
+}: {
+    onNext: () => void;
+    onBack: () => void;
+}) {
+    const colors = useThemeColors();
+    const items = [
+        { type: "Drap", quantity: 45, weight: 18.5, category: "Linge plat", ok: true },
+        { type: "Taie", quantity: 30, weight: 6.2, category: "Linge plat", ok: true },
+        { type: "Serviette", quantity: 35, weight: 21.0, category: "Linge plat", ok: true },
+        { type: "Nappe", quantity: 15, weight: 19.0, category: "Linge plat", ok: true },
+        { type: "Torchon", quantity: 5, weight: 2.8, category: "Linge forme", ok: true },
+    ];
+    const totalWeight = items.reduce((s, i) => s + i.weight, 0);
+    const totalQty = items.reduce((s, i) => s + i.quantity, 0);
+
+    return (
+        <>
+            <StepHeader
+                caps="Étape 3 · Vérification"
+                title="Vérification du triage"
+                subtitle="Confirmez que le tri de l'hôtel correspond à la réalité"
+            />
+
+            <Card
+                padding={14}
+                style={[
+                    styles.clientCtx,
+                    { backgroundColor: colors.brand100, borderColor: colors.brand100 },
+                ]}
+            >
+                <View style={styles.clientCtxRow}>
+                    <Icon name="building" size={14} color={colors.brand800} />
+                    <Text style={[styles.clientCtxName, { color: colors.ink900 }]}>
+                        Hôtel Plaza
+                    </Text>
+                </View>
+                <Text style={[styles.clientCtxSub, { color: colors.ink700 }]}>
+                    {totalWeight.toFixed(1)} kg pesés · {totalQty} pièces
+                </Text>
+            </Card>
+
+            <Card padding={0} style={{ overflow: "hidden", marginBottom: 14 }}>
+                {items.map((it, i) => (
+                    <View
+                        key={it.type}
+                        style={[
+                            styles.verifyRow,
+                            i < items.length - 1 && {
+                                borderBottomColor: colors.ink200,
+                                borderBottomWidth: StyleSheet.hairlineWidth,
+                            },
+                        ]}
+                    >
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.weighType, { color: colors.ink900 }]}>
+                                {it.type}
+                            </Text>
+                            <Text
+                                style={[styles.weighQty, { color: colors.ink500 }]}
+                            >
+                                {it.category}
+                            </Text>
+                        </View>
+                        <View style={{ alignItems: "flex-end", marginRight: 12 }}>
+                            <Text
+                                style={[styles.verifyQty, { color: colors.ink900 }]}
+                            >
+                                {it.quantity} pcs
+                            </Text>
+                            <Text
+                                style={[styles.verifyWeight, { color: colors.ink500 }]}
+                            >
+                                {it.weight.toFixed(1)} kg
+                            </Text>
+                        </View>
+                        <View
+                            style={[
+                                styles.verifyDot,
+                                { backgroundColor: it.ok ? colors.ok600 : colors.danger600 },
+                            ]}
+                        >
+                            <Icon
+                                name={it.ok ? "check" : "x"}
+                                size={12}
+                                color={colors.paper}
+                            />
+                        </View>
+                    </View>
+                ))}
+            </Card>
+
+            <Card
+                padding={14}
+                style={[
+                    styles.verifyBanner,
+                    { backgroundColor: colors.ok100, borderColor: colors.ok600 },
+                ]}
+            >
+                <Icon name="check" size={14} color={colors.ok700} />
+                <Text style={[styles.verifyBannerText, { color: colors.ok700 }]}>
+                    {items.length} types vérifiés — triage conforme
+                </Text>
+            </Card>
+
+            <CtaRow nextLabel="Passer au lavage" onNext={onNext} onBack={onBack} />
+        </>
+    );
+}
+
+/* ---------- STEP 4-5-6 : DISPATCH (shared) ---------- */
+
+type DispatchKind = "lavage" | "sechage" | "calandrage";
+
+function DispatchStep({
+    kind,
+    onNext,
+    onBack,
+}: {
+    kind: DispatchKind;
+    onNext: () => void;
+    onBack: () => void;
+}) {
+    const colors = useThemeColors();
+    const config = getDispatchConfig(kind);
+
+    const totalCycles = config.batches.length;
+    const totalLoad = config.batches.reduce(
+        (s, b) => s + (config.unit === "kg" ? b.totalWeight : b.totalPieces),
+        0,
+    );
+    const avgUtilization =
+        config.batches.reduce(
+            (s, b) =>
+                s +
+                ((config.unit === "kg" ? b.totalWeight : b.totalPieces) /
+                    b.capacity) *
+                    100,
+            0,
+        ) / totalCycles;
+    const totalEnergy = config.batches.reduce((s, b) => s + b.energy, 0);
+
+    return (
+        <>
+            <StepHeader
+                caps={`Étape ${config.stepIndex} · ${config.label}`}
+                title={config.title}
+                subtitle={config.subtitle}
+            />
+
+            {/* KPIs */}
+            <View style={styles.dispatchKpiRow}>
+                <KpiChip label="Cycles" value={`${totalCycles}`} />
+                <KpiChip
+                    label={config.unit === "kg" ? "Poids" : "Pièces"}
+                    value={
+                        config.unit === "kg"
+                            ? `${totalLoad.toFixed(0)} kg`
+                            : `${totalLoad}`
+                    }
+                />
+                <KpiChip label="Utilisation" value={`${avgUtilization.toFixed(0)}%`} />
+            </View>
+
+            <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
+                Plan optimisé
+            </ThemedText>
+
+            <View style={{ gap: 10 }}>
+                {config.batches.map((b, i) => {
+                    const load = config.unit === "kg" ? b.totalWeight : b.totalPieces;
+                    const util = (load / b.capacity) * 100;
+                    const utilColor =
+                        util > 80
+                            ? colors.ok600
+                            : util > 60
+                              ? colors.warn600
+                              : colors.ink500;
+                    return (
+                        <Card key={b.id} padding={14}>
+                            <View style={styles.batchHeader}>
+                                <View style={{ flex: 1 }}>
+                                    <Text
+                                        style={[styles.batchCycle, { color: colors.ink900 }]}
+                                    >
+                                        Cycle {i + 1}
+                                        {b.machineType ? ` · ${b.machineType}` : ""}
+                                    </Text>
+                                    <Text
+                                        style={[styles.batchMachine, { color: colors.ink600 }]}
+                                    >
+                                        {b.machine}
+                                    </Text>
+                                    <Text
+                                        style={[styles.batchProgram, { color: colors.ink500 }]}
+                                    >
+                                        {b.program} · {b.duration} min
+                                    </Text>
+                                </View>
+                                <View
+                                    style={[
+                                        styles.utilBadge,
+                                        { backgroundColor: utilColor },
+                                    ]}
+                                >
+                                    <Text
+                                        style={[styles.utilBadgeText, { color: colors.paper }]}
+                                    >
+                                        {util.toFixed(0)}%
+                                    </Text>
+                                </View>
+                            </View>
+
+                            <View style={{ gap: 4, marginTop: 8 }}>
+                                {b.items.map((it, idx) => (
+                                    <View
+                                        key={idx}
+                                        style={[
+                                            styles.batchItem,
+                                            { backgroundColor: colors.paper2 },
+                                        ]}
+                                    >
+                                        <Text
+                                            style={[styles.batchItemType, { color: colors.ink900 }]}
+                                        >
+                                            {it.type}
+                                        </Text>
+                                        <Text
+                                            style={[styles.batchItemQty, { color: colors.ink600 }]}
+                                        >
+                                            {it.quantity} pcs
+                                            {it.weight != null ? ` · ${it.weight.toFixed(1)} kg` : ""}
+                                        </Text>
+                                    </View>
+                                ))}
+                            </View>
+
+                            <View
+                                style={[
+                                    styles.batchFooter,
+                                    { borderTopColor: colors.ink200 },
+                                ]}
+                            >
+                                <MetaItem
+                                    icon="weight"
+                                    label={
+                                        config.unit === "kg"
+                                            ? `${b.totalWeight.toFixed(1)} kg`
+                                            : `${b.totalPieces} pcs`
+                                    }
+                                />
+                                <MetaItem
+                                    icon="boxes"
+                                    label={`Cap. ${b.capacity} ${config.unit}`}
+                                />
+                                <MetaItem
+                                    icon={config.resourceIcon}
+                                    label={`${b.energy} ${config.resourceUnit}`}
+                                />
+                            </View>
+                        </Card>
+                    );
+                })}
+            </View>
+
+            <Card
+                padding={14}
+                style={[
+                    styles.consumptionCard,
+                    { backgroundColor: colors.terra600, borderColor: colors.terra600 },
+                ]}
+            >
+                <Icon name={config.resourceIcon} size={14} color={colors.paper} />
+                <Text style={[styles.consumptionText, { color: colors.paper }]}>
+                    Consommation totale · {totalEnergy} {config.resourceUnit}
+                </Text>
+            </Card>
+
+            <CtaRow nextLabel={`Lancer le ${config.label.toLowerCase()}`} onNext={onNext} onBack={onBack} />
+        </>
+    );
+}
+
+function getDispatchConfig(kind: DispatchKind) {
+    if (kind === "lavage") {
+        return {
+            stepIndex: 4,
+            label: "Lavage",
+            title: "Dispatching lavage",
+            subtitle: "Optimisation automatique des laveuses",
+            unit: "kg" as const,
+            resourceIcon: "droplet" as IconName,
+            resourceUnit: "L d'eau",
+            batches: [
+                {
+                    id: 1,
+                    machine: "PRIMUS FX600",
+                    machineType: "",
+                    program: "Linge plat blanc 60°",
+                    items: [
+                        { type: "Drap", quantity: 25, weight: 18.5 },
+                        { type: "Taie", quantity: 20, weight: 6.2 },
+                    ],
+                    totalWeight: 24.7,
+                    totalPieces: 45,
+                    capacity: 60,
+                    duration: 45,
+                    energy: 150,
+                },
+                {
+                    id: 2,
+                    machine: "GIRBAU HS6057",
+                    machineType: "",
+                    program: "Linge plat blanc 60°",
+                    items: [
+                        { type: "Serviette", quantity: 35, weight: 21.0 },
+                        { type: "Nappe", quantity: 10, weight: 12.5 },
+                    ],
+                    totalWeight: 33.5,
+                    totalPieces: 45,
+                    capacity: 57,
+                    duration: 45,
+                    energy: 140,
+                },
+                {
+                    id: 3,
+                    machine: "PRIMUS FX350",
+                    machineType: "",
+                    program: "Linge plat couleur 40°",
+                    items: [
+                        { type: "Nappe", quantity: 5, weight: 6.5 },
+                        { type: "Torchon", quantity: 5, weight: 2.8 },
+                    ],
+                    totalWeight: 9.3,
+                    totalPieces: 10,
+                    capacity: 35,
+                    duration: 40,
+                    energy: 80,
+                },
+            ],
+        };
+    }
+    if (kind === "sechage") {
+        return {
+            stepIndex: 5,
+            label: "Séchage",
+            title: "Dispatching séchage",
+            subtitle: "Optimisation automatique des sécheuses",
+            unit: "kg" as const,
+            resourceIcon: "thermo" as IconName,
+            resourceUnit: "kWh",
+            batches: [
+                {
+                    id: 1,
+                    machine: "PRIMUS I50-320",
+                    machineType: "",
+                    program: "Séchage standard",
+                    items: [
+                        { type: "Drap", quantity: 25, weight: 18.5 },
+                        { type: "Taie", quantity: 20, weight: 6.2 },
+                    ],
+                    totalWeight: 24.7,
+                    totalPieces: 45,
+                    capacity: 145,
+                    duration: 35,
+                    energy: 18,
+                },
+                {
+                    id: 2,
+                    machine: "GIRBAU PB5132",
+                    machineType: "",
+                    program: "Séchage standard",
+                    items: [
+                        { type: "Serviette", quantity: 35, weight: 21.0 },
+                        { type: "Nappe", quantity: 10, weight: 12.5 },
+                    ],
+                    totalWeight: 33.5,
+                    totalPieces: 45,
+                    capacity: 145,
+                    duration: 35,
+                    energy: 18,
+                },
+                {
+                    id: 3,
+                    machine: "PRIMUS T24",
+                    machineType: "",
+                    program: "Séchage délicat",
+                    items: [
+                        { type: "Nappe", quantity: 5, weight: 6.5 },
+                        { type: "Torchon", quantity: 5, weight: 2.8 },
+                    ],
+                    totalWeight: 9.3,
+                    totalPieces: 10,
+                    capacity: 24,
+                    duration: 30,
+                    energy: 15,
+                },
+            ],
+        };
+    }
+    // calandrage
+    return {
+        stepIndex: 6,
+        label: "Calandrage",
+        title: "Dispatching calandrage",
+        subtitle: "Optimisation repassage et finition",
+        unit: "pcs" as const,
+        resourceIcon: "spark" as IconName,
+        resourceUnit: "kWh",
+        batches: [
+            {
+                id: 1,
+                machine: "PRIMUS FI280",
+                machineType: "Calandre",
+                program: "Calandrage standard",
+                items: [
+                    { type: "Drap", quantity: 45, weight: null },
+                    { type: "Nappe", quantity: 15, weight: null },
+                ],
+                totalWeight: 0,
+                totalPieces: 60,
+                capacity: 45,
+                duration: 30,
+                energy: 22,
+            },
+            {
+                id: 2,
+                machine: "PRIMUS FI220",
+                machineType: "Calandre",
+                program: "Calandrage standard",
+                items: [
+                    { type: "Serviette", quantity: 35, weight: null },
+                    { type: "Taie", quantity: 30, weight: null },
+                ],
+                totalWeight: 0,
+                totalPieces: 65,
+                capacity: 35,
+                duration: 30,
+                energy: 22,
+            },
+            {
+                id: 3,
+                machine: "GIRBAU MP45",
+                machineType: "Presse",
+                program: "Pressage chemise",
+                items: [{ type: "Torchon", quantity: 5, weight: null }],
+                totalWeight: 0,
+                totalPieces: 5,
+                capacity: 25,
+                duration: 20,
+                energy: 15,
+            },
+        ],
+    };
+}
+
+/* ---------- STEP 7 : PRÉPARATION ---------- */
+
+function PreparationStep({ onBack }: { onBack: () => void }) {
+    const colors = useThemeColors();
+    const summary = [
+        { client: "Hôtel Plaza", weight: 67.5, amount: 135000 },
+        { client: "Hôtel Savana", weight: 42.8, amount: 85600 },
+        { client: "Hôtel Teranga", weight: 157.2, amount: 314400 },
+    ];
+    const totalWeight = summary.reduce((s, o) => s + o.weight, 0);
+    const totalAmount = summary.reduce((s, o) => s + o.amount, 0);
+
+    const handleFinish = () => {
+        Alert.alert(
+            "Journée terminée",
+            `${summary.length} commandes traitées. Tout est archivé.`,
+            [{ text: "OK" }],
+        );
+    };
+
+    return (
+        <>
+            <StepHeader
+                caps="Étape 7 · Préparation"
+                title="Récapitulatif de la journée"
+                subtitle="Vérification finale avant génération des factures"
+            />
+
+            <View style={{ gap: 10, marginTop: 14 }}>
+                {summary.map((o, i) => (
+                    <Card key={o.client} padding={14}>
+                        <View style={styles.summaryHeader}>
+                            <Text
+                                style={[styles.summaryIndex, { color: colors.ink500 }]}
+                            >
+                                {String(i + 1).padStart(2, "0")}
+                            </Text>
+                            <Text style={[styles.summaryClient, { color: colors.ink900 }]}>
+                                {o.client}
+                            </Text>
+                            <StatusBadge status="Prête" />
+                        </View>
+                        <View
+                            style={[
+                                styles.summaryFooter,
+                                { borderTopColor: colors.ink200 },
+                            ]}
+                        >
+                            <View style={{ flex: 1 }}>
+                                <Text
+                                    style={[styles.summaryLabel, { color: colors.ink500 }]}
+                                >
+                                    Poids traité
+                                </Text>
+                                <Text
+                                    style={[styles.summaryValue, { color: colors.ink900 }]}
+                                >
+                                    {o.weight.toFixed(1)} kg
+                                </Text>
+                            </View>
+                            <View style={{ flex: 1, alignItems: "flex-end" }}>
+                                <Text
+                                    style={[styles.summaryLabel, { color: colors.ink500 }]}
+                                >
+                                    Montant
+                                </Text>
+                                <Text
+                                    style={[styles.summaryAmount, { color: colors.ok700 }]}
+                                >
+                                    {formatCurrency(o.amount)}
+                                </Text>
                             </View>
                         </View>
-                    </TouchableOpacity>
+                    </Card>
                 ))}
+            </View>
 
-                <Button
-                    title={`Passer à la pesée (${selectedOrders.length} commandes)`}
-                    onPress={onNext}
-                    disabled={selectedOrders.length === 0}
-                    style={{ marginTop: 16 }}
-                />
+            {/* Grand total */}
+            <Card
+                padding={18}
+                style={[
+                    styles.grandTotal,
+                    { backgroundColor: colors.brand900, borderColor: colors.brand900 },
+                ]}
+            >
+                <Text style={[styles.grandCaps, { color: colors.brand100 }]}>
+                    Total journée
+                </Text>
+                <Text style={[styles.grandValue, { color: colors.paper }]}>
+                    {formatCurrency(totalAmount)}
+                </Text>
+                <View style={[styles.grandRow, { borderTopColor: colors.brand700 }]}>
+                    <View style={{ flex: 1 }}>
+                        <Text
+                            style={[styles.grandLabel, { color: colors.brand100 }]}
+                        >
+                            Commandes
+                        </Text>
+                        <Text style={[styles.grandNumber, { color: colors.paper }]}>
+                            {summary.length}
+                        </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text
+                            style={[styles.grandLabel, { color: colors.brand100 }]}
+                        >
+                            Poids total
+                        </Text>
+                        <Text style={[styles.grandNumber, { color: colors.paper }]}>
+                            {totalWeight.toFixed(1)} kg
+                        </Text>
+                    </View>
+                </View>
             </Card>
+
+            {/* Production stats */}
+            <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
+                Statistiques de production
+            </ThemedText>
+            <View style={styles.prodStatsRow}>
+                <ProdStat
+                    icon="droplet"
+                    value="3"
+                    label="Cycles lavage"
+                    footer="370 L"
+                />
+                <ProdStat
+                    icon="thermo"
+                    value="3"
+                    label="Cycles séchage"
+                    footer="51 kWh"
+                />
+                <ProdStat
+                    icon="spark"
+                    value="3"
+                    label="Calandrage"
+                    footer="59 kWh"
+                />
+            </View>
+
+            <Pressable
+                onPress={handleFinish}
+                style={[styles.finishBtn, { backgroundColor: colors.baobab600 }]}
+            >
+                <Icon name="check" size={15} color={colors.paper} />
+                <Text style={[styles.finishBtnText, { color: colors.paper }]}>
+                    Terminer la journée
+                </Text>
+            </Pressable>
+
+            <Pressable
+                onPress={onBack}
+                style={[
+                    styles.secondaryBtn,
+                    { backgroundColor: colors.paper, borderColor: colors.ink200 },
+                ]}
+            >
+                <Icon name="chevLeft" size={14} color={colors.ink700} />
+                <Text style={[styles.secondaryBtnText, { color: colors.ink700 }]}>
+                    Retour
+                </Text>
+            </Pressable>
+        </>
+    );
+}
+
+/* ---------- sous-composants ---------- */
+
+function StepHeader({
+    caps,
+    title,
+    subtitle,
+}: {
+    caps: string;
+    title: string;
+    subtitle: string;
+}) {
+    const colors = useThemeColors();
+    return (
+        <View style={styles.stepHeader}>
+            <Text style={[styles.stepHeaderCaps, { color: colors.terra700 }]}>
+                {caps}
+            </Text>
+            <Text style={[styles.stepHeaderTitle, { color: colors.ink900 }]}>
+                {title}
+            </Text>
+            <Text style={[styles.stepHeaderSub, { color: colors.ink500 }]}>
+                {subtitle}
+            </Text>
         </View>
     );
 }
 
-// STEP 2: PESÉE
-function PeseeStep({ colors, onNext, onBack }: any) {
-    const [currentOrderIndex, setCurrentOrderIndex] = useState(0);
-    const mockLinenTypes = [
-        { type: 'Drap', quantity: 45, weight: 0 },
-        { type: 'Taie', quantity: 30, weight: 0 },
-        { type: 'Serviette', quantity: 35, weight: 0 },
-        { type: 'Nappe', quantity: 15, weight: 0 },
-        { type: 'Torchon', quantity: 5, weight: 0 },
-    ];
-    const [items, setItems] = useState(mockLinenTypes);
-
-    const updateWeight = (index: number, weight: string) => {
-        const updated = [...items];
-        updated[index].weight = parseFloat(weight) || 0;
-        setItems(updated);
-    };
-
-    const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
-
+function CtaRow({
+    nextLabel,
+    nextDisabled = false,
+    onNext,
+    onBack,
+}: {
+    nextLabel: string;
+    nextDisabled?: boolean;
+    onNext: () => void;
+    onBack?: () => void;
+}) {
+    const colors = useThemeColors();
     return (
-        <ScrollView style={{ padding: Spacing.md }}>
-            <Card>
-                <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 16 }}>⚖️</Text>
-                <ThemedText variate="headline" color="textPrimary" style={{ textAlign: 'center', marginBottom: 8 }}>
-                    Pesée par type de linge
-                </ThemedText>
-                <ThemedText variate="body2" color="textSecondary" style={{ textAlign: 'center', marginBottom: 24 }}>
-                    Pesez chaque type individuellement
-                </ThemedText>
-
-                <View style={[styles.infoBox, { backgroundColor: '#E3F2FD', marginBottom: 16 }]}>
-                    <Text style={{ fontSize: 20, marginBottom: 4, fontWeight: 'bold' }}>🏨 Hôtel Plaza</Text>
-                    <ThemedText variate="body2" color="textSecondary">
-                        Commande #CMD-2026-001
-                    </ThemedText>
-                </View>
-
-                {items.map((item, index) => (
-                    <View key={index} style={styles.weighingItem}>
-                        <View style={{ flex: 1 }}>
-                            <ThemedText variate="subtitle1" color="textPrimary" style={{ marginBottom: 4 }}>
-                                {item.type}
-                            </ThemedText>
-                            <ThemedText variate="caption" color="textSecondary">
-                                {item.quantity} pièces
-                            </ThemedText>
-                        </View>
-                        <View style={{ width: 100 }}>
-                            <ThemedText variate="caption" color="textSecondary" style={{ marginBottom: 4 }}>
-                                Poids (kg)
-                            </ThemedText>
-                            <View style={styles.weightInput}>
-                                <ThemedText variate="body1" color="textPrimary" style={{ fontWeight: 'bold' }}>
-                                    {item.weight > 0 ? item.weight.toFixed(1) : '0.0'}
-                                </ThemedText>
-                            </View>
-                        </View>
-                    </View>
-                ))}
-
-                <View style={[styles.infoBox, { backgroundColor: '#4CAF50', marginTop: 16 }]}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <ThemedText variate="subtitle1" style={{ color: 'white' }}>
-                            Poids total:
-                        </ThemedText>
-                        <ThemedText variate="h1" style={{ color: 'white', fontWeight: 'bold' }}>
-                            {totalWeight.toFixed(1)} kg
-                        </ThemedText>
-                    </View>
-                </View>
-
-                <View style={styles.buttonRow}>
-                    <Button title="Retour" onPress={onBack} variant="outline" style={{ flex: 1 }} />
-                    <View style={{ width: 12 }} />
-                    <Button title="Valider et continuer" onPress={onNext} style={{ flex: 1 }} />
-                </View>
-            </Card>
-        </ScrollView>
+        <View style={styles.ctaRow}>
+            {onBack && (
+                <Pressable
+                    onPress={onBack}
+                    style={[
+                        styles.backBtn,
+                        { backgroundColor: colors.paper, borderColor: colors.ink200 },
+                    ]}
+                >
+                    <Icon name="chevLeft" size={14} color={colors.ink700} />
+                    <Text style={[styles.backBtnText, { color: colors.ink700 }]}>
+                        Retour
+                    </Text>
+                </Pressable>
+            )}
+            <Pressable
+                onPress={onNext}
+                disabled={nextDisabled}
+                style={[
+                    styles.nextBtn,
+                    {
+                        backgroundColor: nextDisabled ? colors.ink300 : colors.brand800,
+                    },
+                ]}
+            >
+                <Text style={[styles.nextBtnText, { color: colors.paper }]}>
+                    {nextLabel}
+                </Text>
+                <Icon name="arrowRight" size={14} color={colors.paper} />
+            </Pressable>
+        </View>
     );
 }
 
-// STEP 3: VÉRIFICATION
-function VerificationStep({ colors, onNext, onBack }: any) {
-    const mockTriageItems = [
-        { type: 'Drap', quantity: 45, weight: 18.5, category: 'Linge Plat' },
-        { type: 'Taie', quantity: 30, weight: 6.2, category: 'Linge Plat' },
-        { type: 'Serviette', quantity: 35, weight: 21.0, category: 'Linge Plat' },
-        { type: 'Nappe', quantity: 15, weight: 19.0, category: 'Linge Plat' },
-        { type: 'Torchon', quantity: 5, weight: 2.8, category: 'Linge Forme' },
-    ];
-
-    const totalWeight = mockTriageItems.reduce((sum, item) => sum + item.weight, 0);
-    const totalQuantity = mockTriageItems.reduce((sum, item) => sum + item.quantity, 0);
-
+function KpiChip({ label, value }: { label: string; value: string }) {
+    const colors = useThemeColors();
     return (
-        <ScrollView style={{ padding: Spacing.md }}>
-            <Card>
-                <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 16 }}>✂️</Text>
-                <ThemedText variate="headline" color="textPrimary" style={{ textAlign: 'center', marginBottom: 8 }}>
-                    Vérification du triage
-                </ThemedText>
-                <ThemedText variate="body2" color="textSecondary" style={{ textAlign: 'center', marginBottom: 24 }}>
-                    Confirmez le tri effectué par l'hôtel
-                </ThemedText>
-
-                <View style={[styles.infoBox, { backgroundColor: '#E3F2FD', marginBottom: 16 }]}>
-                    <Text style={{ fontSize: 20, marginBottom: 4, fontWeight: 'bold' }}>🏨 Hôtel Plaza</Text>
-                    <ThemedText variate="body2" color="textSecondary">
-                        Poids pesé: {totalWeight.toFixed(1)} kg • {totalQuantity} pièces
-                    </ThemedText>
-                </View>
-
-                <ThemedText variate="subtitle1" color="textPrimary" style={{ marginBottom: 12, fontWeight: 'bold' }}>
-                    Vérification par type
-                </ThemedText>
-
-                {mockTriageItems.map((item, index) => (
-                    <View key={index} style={styles.weighingItem}>
-                        <View style={{ flex: 1 }}>
-                            <ThemedText variate="subtitle1" color="textPrimary" style={{ marginBottom: 4 }}>
-                                {item.type}
-                            </ThemedText>
-                            <ThemedText variate="caption" color="textSecondary">
-                                {item.category}
-                            </ThemedText>
-                        </View>
-                        <View style={{ alignItems: 'flex-end' }}>
-                            <ThemedText variate="body1" color="textPrimary" style={{ fontWeight: 'bold' }}>
-                                {item.quantity} pièces
-                            </ThemedText>
-                            <ThemedText variate="caption" color="textSecondary">
-                                {item.weight.toFixed(1)} kg
-                            </ThemedText>
-                        </View>
-                        <View style={{ marginLeft: 12 }}>
-                            <View style={[styles.badge, { backgroundColor: '#4CAF50' }]}>
-                                <Text style={{ color: 'white', fontSize: 16 }}>✓</Text>
-                            </View>
-                        </View>
-                    </View>
-                ))}
-
-                <View style={[styles.infoBox, { backgroundColor: '#4CAF50', marginTop: 16 }]}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <ThemedText variate="subtitle1" style={{ color: 'white' }}>
-                            ✅ Tous les types vérifiés
-                        </ThemedText>
-                        <ThemedText variate="h2" style={{ color: 'white', fontWeight: 'bold' }}>
-                            {mockTriageItems.length}
-                        </ThemedText>
-                    </View>
-                </View>
-
-                <View style={styles.buttonRow}>
-                    <Button title="Retour" onPress={onBack} variant="outline" style={{ flex: 1 }} />
-                    <View style={{ width: 12 }} />
-                    <Button title="Passer au lavage" onPress={onNext} style={{ flex: 1 }} />
-                </View>
-            </Card>
-        </ScrollView>
+        <View
+            style={[
+                styles.kpiChip,
+                { backgroundColor: colors.paper, borderColor: colors.ink200 },
+            ]}
+        >
+            <Text style={[styles.kpiChipValue, { color: colors.ink900 }]}>
+                {value}
+            </Text>
+            <Text style={[styles.kpiChipLabel, { color: colors.ink500 }]}>
+                {label}
+            </Text>
+        </View>
     );
 }
 
-// STEP 4: LAVAGE
-function LavageStep({ colors, onNext, onBack }: any) {
-    const mockBatches = [
-        {
-            id: 1,
-            machine: 'PRIMUS FX600',
-            program: 'Linge Plat Blanc 60°C',
-            items: [
-                { type: 'Drap', quantity: 25, weight: 18.5 },
-                { type: 'Taie', quantity: 20, weight: 6.2 }
-            ],
-            totalWeight: 24.7,
-            capacity: 60,
-            duration: 45,
-            water: 150
-        },
-        {
-            id: 2,
-            machine: 'GIRBAU HS6057',
-            program: 'Linge Plat Blanc 60°C',
-            items: [
-                { type: 'Serviette', quantity: 35, weight: 21.0 },
-                { type: 'Nappe', quantity: 10, weight: 12.5 }
-            ],
-            totalWeight: 33.5,
-            capacity: 57,
-            duration: 45,
-            water: 140
-        },
-        {
-            id: 3,
-            machine: 'PRIMUS FX350',
-            program: 'Linge Plat Couleur 40°C',
-            items: [
-                { type: 'Nappe', quantity: 5, weight: 6.5 },
-                { type: 'Torchon', quantity: 5, weight: 2.8 }
-            ],
-            totalWeight: 9.3,
-            capacity: 35,
-            duration: 40,
-            water: 80
-        }
-    ];
-
-    const totalCycles = mockBatches.length;
-    const totalWeight = mockBatches.reduce((sum, b) => sum + b.totalWeight, 0);
-    const avgUtilization = mockBatches.reduce((sum, b) => sum + (b.totalWeight / b.capacity * 100), 0) / totalCycles;
-    const totalWater = mockBatches.reduce((sum, b) => sum + b.water, 0);
-
+function MetaItem({ icon, label }: { icon: IconName; label: string }) {
+    const colors = useThemeColors();
     return (
-        <ScrollView style={{ padding: Spacing.md }}>
-            <Card>
-                <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 16 }}>💧</Text>
-                <ThemedText variate="headline" color="textPrimary" style={{ textAlign: 'center', marginBottom: 8 }}>
-                    Dispatching Lavage
-                </ThemedText>
-                <ThemedText variate="body2" color="textSecondary" style={{ textAlign: 'center', marginBottom: 24 }}>
-                    Optimisation automatique des laveuses
-                </ThemedText>
-
-                {/* Statistiques globales */}
-                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-                    <View style={[styles.statCard, { backgroundColor: '#E3F2FD', flex: 1 }]}>
-                        <ThemedText variate="caption" color="textSecondary" style={{ marginBottom: 4 }}>
-                            Cycles
-                        </ThemedText>
-                        <ThemedText variate="h2" color="textPrimary" style={{ fontWeight: 'bold' }}>
-                            {totalCycles}
-                        </ThemedText>
-                    </View>
-                    <View style={[styles.statCard, { backgroundColor: '#E8F5E9', flex: 1 }]}>
-                        <ThemedText variate="caption" color="textSecondary" style={{ marginBottom: 4 }}>
-                            Poids
-                        </ThemedText>
-                        <ThemedText variate="h2" color="textPrimary" style={{ fontWeight: 'bold' }}>
-                            {totalWeight.toFixed(0)}kg
-                        </ThemedText>
-                    </View>
-                    <View style={[styles.statCard, { backgroundColor: '#FFF3E0', flex: 1 }]}>
-                        <ThemedText variate="caption" color="textSecondary" style={{ marginBottom: 4 }}>
-                            Util.
-                        </ThemedText>
-                        <ThemedText variate="h2" color="textPrimary" style={{ fontWeight: 'bold' }}>
-                            {avgUtilization.toFixed(0)}%
-                        </ThemedText>
-                    </View>
-                </View>
-
-                {/* Liste des batches */}
-                <ThemedText variate="subtitle1" color="textPrimary" style={{ marginBottom: 12, fontWeight: 'bold' }}>
-                    Plan de lavage optimisé
-                </ThemedText>
-
-                {mockBatches.map((batch, index) => {
-                    const utilization = (batch.totalWeight / batch.capacity * 100);
-                    const utilizationColor = utilization > 80 ? '#4CAF50' : utilization > 60 ? '#FF9800' : '#9E9E9E';
-
-                    return (
-                        <View key={batch.id} style={styles.batchCard}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                                <View style={{ flex: 1 }}>
-                                    <ThemedText variate="subtitle1" color="textPrimary" style={{ fontWeight: 'bold' }}>
-                                        Cycle {index + 1}
-                                    </ThemedText>
-                                    <ThemedText variate="caption" color="textSecondary">
-                                        {batch.machine}
-                                    </ThemedText>
-                                    <ThemedText variate="caption" color="textSecondary">
-                                        {batch.program} • {batch.duration} min
-                                    </ThemedText>
-                                </View>
-                                <View style={[styles.badge, { backgroundColor: utilizationColor }]}>
-                                    <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
-                                        {utilization.toFixed(0)}%
-                                    </Text>
-                                </View>
-                            </View>
-
-                            {/* Items */}
-                            {batch.items.map((item, idx) => (
-                                <View key={idx} style={styles.batchItem}>
-                                    <ThemedText variate="body2" color="textPrimary">
-                                        {item.type}
-                                    </ThemedText>
-                                    <ThemedText variate="body2" color="textSecondary">
-                                        {item.quantity} pcs • {item.weight.toFixed(1)} kg
-                                    </ThemedText>
-                                </View>
-                            ))}
-
-                            {/* Metrics */}
-                            <View style={{ flexDirection: 'row', gap: 12, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E0E0E0' }}>
-                                <View style={{ flex: 1 }}>
-                                    <ThemedText variate="caption" color="textSecondary">
-                                        Total: {batch.totalWeight.toFixed(1)}kg
-                                    </ThemedText>
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <ThemedText variate="caption" color="textSecondary">
-                                        Cap: {batch.capacity}kg
-                                    </ThemedText>
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <ThemedText variate="caption" color="textSecondary">
-                                        Eau: {batch.water}L
-                                    </ThemedText>
-                                </View>
-                            </View>
-                        </View>
-                    );
-                })}
-
-                <View style={[styles.infoBox, { backgroundColor: '#E3F2FD', marginTop: 16 }]}>
-                    <ThemedText variate="body2" color="textPrimary" style={{ textAlign: 'center' }}>
-                        💧 Consommation totale d'eau: {totalWater}L
-                    </ThemedText>
-                </View>
-
-                <View style={styles.buttonRow}>
-                    <Button title="Retour" onPress={onBack} variant="outline" style={{ flex: 1 }} />
-                    <View style={{ width: 12 }} />
-                    <Button title="Lancer le lavage" onPress={onNext} style={{ flex: 1 }} />
-                </View>
-            </Card>
-        </ScrollView>
+        <View style={styles.metaItem}>
+            <Icon name={icon} size={11} color={colors.ink500} />
+            <Text style={[styles.metaText, { color: colors.ink700 }]}>
+                {label}
+            </Text>
+        </View>
     );
 }
 
-// STEP 5: SÉCHAGE
-function SechageStep({ colors, onNext, onBack }: any) {
-    const mockBatches = [
-        {
-            id: 1,
-            machine: 'PRIMUS I50-320',
-            program: 'Séchage Standard',
-            items: [
-                { type: 'Drap', quantity: 25, weight: 18.5 },
-                { type: 'Taie', quantity: 20, weight: 6.2 }
-            ],
-            totalWeight: 24.7,
-            capacity: 145,
-            duration: 35,
-            energy: 18
-        },
-        {
-            id: 2,
-            machine: 'GIRBAU PB5132',
-            program: 'Séchage Standard',
-            items: [
-                { type: 'Serviette', quantity: 35, weight: 21.0 },
-                { type: 'Nappe', quantity: 10, weight: 12.5 }
-            ],
-            totalWeight: 33.5,
-            capacity: 145,
-            duration: 35,
-            energy: 18
-        },
-        {
-            id: 3,
-            machine: 'PRIMUS T24',
-            program: 'Séchage Délicat',
-            items: [
-                { type: 'Nappe', quantity: 5, weight: 6.5 },
-                { type: 'Torchon', quantity: 5, weight: 2.8 }
-            ],
-            totalWeight: 9.3,
-            capacity: 24,
-            duration: 30,
-            energy: 15
-        }
-    ];
-
-    const totalCycles = mockBatches.length;
-    const totalWeight = mockBatches.reduce((sum, b) => sum + b.totalWeight, 0);
-    const avgUtilization = mockBatches.reduce((sum, b) => sum + (b.totalWeight / b.capacity * 100), 0) / totalCycles;
-    const totalEnergy = mockBatches.reduce((sum, b) => sum + b.energy, 0);
-
+function ProdStat({
+    icon,
+    value,
+    label,
+    footer,
+}: {
+    icon: IconName;
+    value: string;
+    label: string;
+    footer: string;
+}) {
+    const colors = useThemeColors();
     return (
-        <ScrollView style={{ padding: Spacing.md }}>
-            <Card>
-                <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 16 }}>🌬️</Text>
-                <ThemedText variate="headline" color="textPrimary" style={{ textAlign: 'center', marginBottom: 8 }}>
-                    Dispatching Séchage
-                </ThemedText>
-                <ThemedText variate="body2" color="textSecondary" style={{ textAlign: 'center', marginBottom: 24 }}>
-                    Optimisation automatique des sécheuses
-                </ThemedText>
-
-                {/* Statistiques globales */}
-                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-                    <View style={[styles.statCard, { backgroundColor: '#E8F5E9', flex: 1 }]}>
-                        <ThemedText variate="caption" color="textSecondary" style={{ marginBottom: 4 }}>
-                            Cycles
-                        </ThemedText>
-                        <ThemedText variate="h2" color="textPrimary" style={{ fontWeight: 'bold' }}>
-                            {totalCycles}
-                        </ThemedText>
-                    </View>
-                    <View style={[styles.statCard, { backgroundColor: '#FFF3E0', flex: 1 }]}>
-                        <ThemedText variate="caption" color="textSecondary" style={{ marginBottom: 4 }}>
-                            Poids
-                        </ThemedText>
-                        <ThemedText variate="h2" color="textPrimary" style={{ fontWeight: 'bold' }}>
-                            {totalWeight.toFixed(0)}kg
-                        </ThemedText>
-                    </View>
-                    <View style={[styles.statCard, { backgroundColor: '#E1F5FE', flex: 1 }]}>
-                        <ThemedText variate="caption" color="textSecondary" style={{ marginBottom: 4 }}>
-                            Util.
-                        </ThemedText>
-                        <ThemedText variate="h2" color="textPrimary" style={{ fontWeight: 'bold' }}>
-                            {avgUtilization.toFixed(0)}%
-                        </ThemedText>
-                    </View>
-                </View>
-
-                {/* Liste des batches */}
-                <ThemedText variate="subtitle1" color="textPrimary" style={{ marginBottom: 12, fontWeight: 'bold' }}>
-                    Plan de séchage optimisé
-                </ThemedText>
-
-                {mockBatches.map((batch, index) => {
-                    const utilization = (batch.totalWeight / batch.capacity * 100);
-                    const utilizationColor = utilization > 80 ? '#4CAF50' : utilization > 60 ? '#FF9800' : '#9E9E9E';
-
-                    return (
-                        <View key={batch.id} style={styles.batchCard}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                                <View style={{ flex: 1 }}>
-                                    <ThemedText variate="subtitle1" color="textPrimary" style={{ fontWeight: 'bold' }}>
-                                        Cycle {index + 1}
-                                    </ThemedText>
-                                    <ThemedText variate="caption" color="textSecondary">
-                                        {batch.machine}
-                                    </ThemedText>
-                                    <ThemedText variate="caption" color="textSecondary">
-                                        {batch.program} • {batch.duration} min
-                                    </ThemedText>
-                                </View>
-                                <View style={[styles.badge, { backgroundColor: utilizationColor }]}>
-                                    <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
-                                        {utilization.toFixed(0)}%
-                                    </Text>
-                                </View>
-                            </View>
-
-                            {/* Items */}
-                            {batch.items.map((item, idx) => (
-                                <View key={idx} style={styles.batchItem}>
-                                    <ThemedText variate="body2" color="textPrimary">
-                                        {item.type}
-                                    </ThemedText>
-                                    <ThemedText variate="body2" color="textSecondary">
-                                        {item.quantity} pcs • {item.weight.toFixed(1)} kg
-                                    </ThemedText>
-                                </View>
-                            ))}
-
-                            {/* Metrics */}
-                            <View style={{ flexDirection: 'row', gap: 12, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E0E0E0' }}>
-                                <View style={{ flex: 1 }}>
-                                    <ThemedText variate="caption" color="textSecondary">
-                                        Total: {batch.totalWeight.toFixed(1)}kg
-                                    </ThemedText>
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <ThemedText variate="caption" color="textSecondary">
-                                        Cap: {batch.capacity}kg
-                                    </ThemedText>
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <ThemedText variate="caption" color="textSecondary">
-                                        Énergie: {batch.energy} kWh
-                                    </ThemedText>
-                                </View>
-                            </View>
-                        </View>
-                    );
-                })}
-
-                <View style={[styles.infoBox, { backgroundColor: '#E8F5E9', marginTop: 16 }]}>
-                    <ThemedText variate="body2" color="textPrimary" style={{ textAlign: 'center' }}>
-                        ⚡ Consommation totale d'énergie: {totalEnergy} kWh
-                    </ThemedText>
-                </View>
-
-                <View style={styles.buttonRow}>
-                    <Button title="Retour" onPress={onBack} variant="outline" style={{ flex: 1 }} />
-                    <View style={{ width: 12 }} />
-                    <Button title="Lancer le séchage" onPress={onNext} style={{ flex: 1 }} />
-                </View>
-            </Card>
-        </ScrollView>
+        <View
+            style={[
+                styles.prodStatTile,
+                { backgroundColor: colors.paper, borderColor: colors.ink200 },
+            ]}
+        >
+            <View
+                style={[styles.prodStatIcon, { backgroundColor: colors.paper2 }]}
+            >
+                <Icon name={icon} size={13} color={colors.terra700} />
+            </View>
+            <Text style={[styles.prodStatValue, { color: colors.ink900 }]}>
+                {value}
+            </Text>
+            <Text style={[styles.prodStatLabel, { color: colors.ink500 }]}>
+                {label}
+            </Text>
+            <Text style={[styles.prodStatFooter, { color: colors.ink700 }]}>
+                {footer}
+            </Text>
+        </View>
     );
 }
 
-// STEP 6: CALANDRAGE
-function CalandrageStep({ colors, onNext, onBack }: any) {
-    const mockBatches = [
-        {
-            id: 1,
-            machine: 'PRIMUS FI280',
-            machineType: 'Calandre',
-            program: 'Calandrage Standard',
-            items: [
-                { type: 'Drap', quantity: 45 },
-                { type: 'Nappe', quantity: 15 }
-            ],
-            totalPieces: 60,
-            capacity: 45,
-            duration: 30,
-            energy: 22
-        },
-        {
-            id: 2,
-            machine: 'PRIMUS FI220',
-            machineType: 'Calandre',
-            program: 'Calandrage Standard',
-            items: [
-                { type: 'Serviette', quantity: 35 },
-                { type: 'Taie', quantity: 30 }
-            ],
-            totalPieces: 65,
-            capacity: 35,
-            duration: 30,
-            energy: 22
-        },
-        {
-            id: 3,
-            machine: 'GIRBAU MP45',
-            machineType: 'Presse',
-            program: 'Pressage Chemise',
-            items: [
-                { type: 'Torchon', quantity: 5 }
-            ],
-            totalPieces: 5,
-            capacity: 25,
-            duration: 20,
-            energy: 15
-        }
-    ];
-
-    const totalCycles = mockBatches.length;
-    const totalPieces = mockBatches.reduce((sum, b) => sum + b.totalPieces, 0);
-    const avgUtilization = mockBatches.reduce((sum, b) => sum + (b.totalPieces / b.capacity * 100), 0) / totalCycles;
-    const totalEnergy = mockBatches.reduce((sum, b) => sum + b.energy, 0);
-
-    return (
-        <ScrollView style={{ padding: Spacing.md }}>
-            <Card>
-                <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 16 }}>✨</Text>
-                <ThemedText variate="headline" color="textPrimary" style={{ textAlign: 'center', marginBottom: 8 }}>
-                    Dispatching Calandrage
-                </ThemedText>
-                <ThemedText variate="body2" color="textSecondary" style={{ textAlign: 'center', marginBottom: 24 }}>
-                    Optimisation repassage et finition
-                </ThemedText>
-
-                {/* Statistiques globales */}
-                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-                    <View style={[styles.statCard, { backgroundColor: '#FCE4EC', flex: 1 }]}>
-                        <ThemedText variate="caption" color="textSecondary" style={{ marginBottom: 4 }}>
-                            Cycles
-                        </ThemedText>
-                        <ThemedText variate="h2" color="textPrimary" style={{ fontWeight: 'bold' }}>
-                            {totalCycles}
-                        </ThemedText>
-                    </View>
-                    <View style={[styles.statCard, { backgroundColor: '#F3E5F5', flex: 1 }]}>
-                        <ThemedText variate="caption" color="textSecondary" style={{ marginBottom: 4 }}>
-                            Pièces
-                        </ThemedText>
-                        <ThemedText variate="h2" color="textPrimary" style={{ fontWeight: 'bold' }}>
-                            {totalPieces}
-                        </ThemedText>
-                    </View>
-                    <View style={[styles.statCard, { backgroundColor: '#E8EAF6', flex: 1 }]}>
-                        <ThemedText variate="caption" color="textSecondary" style={{ marginBottom: 4 }}>
-                            Util.
-                        </ThemedText>
-                        <ThemedText variate="h2" color="textPrimary" style={{ fontWeight: 'bold' }}>
-                            {avgUtilization.toFixed(0)}%
-                        </ThemedText>
-                    </View>
-                </View>
-
-                {/* Liste des batches */}
-                <ThemedText variate="subtitle1" color="textPrimary" style={{ marginBottom: 12, fontWeight: 'bold' }}>
-                    Plan de calandrage/pressage optimisé
-                </ThemedText>
-
-                {mockBatches.map((batch, index) => {
-                    const utilization = (batch.totalPieces / batch.capacity * 100);
-                    const utilizationColor = utilization > 80 ? '#4CAF50' : utilization > 60 ? '#FF9800' : '#9E9E9E';
-
-                    return (
-                        <View key={batch.id} style={styles.batchCard}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                                <View style={{ flex: 1 }}>
-                                    <ThemedText variate="subtitle1" color="textPrimary" style={{ fontWeight: 'bold' }}>
-                                        Cycle {index + 1} - {batch.machineType}
-                                    </ThemedText>
-                                    <ThemedText variate="caption" color="textSecondary">
-                                        {batch.machine}
-                                    </ThemedText>
-                                    <ThemedText variate="caption" color="textSecondary">
-                                        {batch.program} • {batch.duration} min
-                                    </ThemedText>
-                                </View>
-                                <View style={[styles.badge, { backgroundColor: utilizationColor }]}>
-                                    <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
-                                        {utilization.toFixed(0)}%
-                                    </Text>
-                                </View>
-                            </View>
-
-                            {/* Items */}
-                            {batch.items.map((item, idx) => (
-                                <View key={idx} style={styles.batchItem}>
-                                    <ThemedText variate="body2" color="textPrimary">
-                                        {item.type}
-                                    </ThemedText>
-                                    <ThemedText variate="body2" color="textSecondary">
-                                        {item.quantity} pièces
-                                    </ThemedText>
-                                </View>
-                            ))}
-
-                            {/* Metrics */}
-                            <View style={{ flexDirection: 'row', gap: 12, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E0E0E0' }}>
-                                <View style={{ flex: 1 }}>
-                                    <ThemedText variate="caption" color="textSecondary">
-                                        Total: {batch.totalPieces} pcs
-                                    </ThemedText>
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <ThemedText variate="caption" color="textSecondary">
-                                        Cap: {batch.capacity} pcs
-                                    </ThemedText>
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <ThemedText variate="caption" color="textSecondary">
-                                        Énergie: {batch.energy} kWh
-                                    </ThemedText>
-                                </View>
-                            </View>
-                        </View>
-                    );
-                })}
-
-                <View style={[styles.infoBox, { backgroundColor: '#FCE4EC', marginTop: 16 }]}>
-                    <ThemedText variate="body2" color="textPrimary" style={{ textAlign: 'center' }}>
-                        ⚡ Consommation totale d'énergie: {totalEnergy} kWh
-                    </ThemedText>
-                </View>
-
-                <View style={styles.buttonRow}>
-                    <Button title="Retour" onPress={onBack} variant="outline" style={{ flex: 1 }} />
-                    <View style={{ width: 12 }} />
-                    <Button title="Lancer le calandrage" onPress={onNext} style={{ flex: 1 }} />
-                </View>
-            </Card>
-        </ScrollView>
-    );
-}
-
-// STEP 7: PRÉPARATION
-function PreparationStep({ colors, onBack }: any) {
-    const handleFinish = () => {
-        Alert.alert(
-            'Journée terminée! 🎉',
-            '3 commandes traitées\nTout est archivé',
-            [{ text: 'OK' }]
-        );
-    };
-
-    const mockOrderSummary = [
-        { client: 'Hôtel Plaza', weight: 67.5, amount: 135000 },
-        { client: 'Hôtel Savana', weight: 42.8, amount: 85600 },
-        { client: 'Hôtel Teranga', weight: 157.2, amount: 314400 }
-    ];
-
-    const totalWeight = mockOrderSummary.reduce((sum, o) => sum + o.weight, 0);
-    const totalAmount = mockOrderSummary.reduce((sum, o) => sum + o.amount, 0);
-
-    return (
-        <ScrollView style={{ padding: Spacing.md }}>
-            <Card>
-                <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 16 }}>📋</Text>
-                <ThemedText variate="headline" color="textPrimary" style={{ textAlign: 'center', marginBottom: 8 }}>
-                    Récapitulatif Final
-                </ThemedText>
-                <ThemedText variate="body2" color="textSecondary" style={{ textAlign: 'center', marginBottom: 24 }}>
-                    Vérifiez et générez les factures
-                </ThemedText>
-
-                {/* Détail par commande */}
-                <ThemedText variate="subtitle1" color="textPrimary" style={{ marginBottom: 12, fontWeight: 'bold' }}>
-                    Détail des commandes
-                </ThemedText>
-
-                {mockOrderSummary.map((order, index) => (
-                    <View key={index} style={styles.orderSummaryCard}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <ThemedText variate="subtitle1" color="textPrimary" style={{ fontWeight: 'bold' }}>
-                                {index + 1}. {order.client}
-                            </ThemedText>
-                            <View style={[styles.badge, { backgroundColor: '#4CAF50' }]}>
-                                <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>
-                                    ✓ PRÊT
-                                </Text>
-                            </View>
-                        </View>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E0E0E0' }}>
-                            <View>
-                                <ThemedText variate="caption" color="textSecondary" style={{ marginBottom: 4 }}>
-                                    Poids traité
-                                </ThemedText>
-                                <ThemedText variate="body1" color="textPrimary" style={{ fontWeight: 'bold' }}>
-                                    {order.weight.toFixed(1)} kg
-                                </ThemedText>
-                            </View>
-                            <View style={{ alignItems: 'flex-end' }}>
-                                <ThemedText variate="caption" color="textSecondary" style={{ marginBottom: 4 }}>
-                                    Montant facturé
-                                </ThemedText>
-                                <ThemedText variate="body1" style={{ fontWeight: 'bold', color: '#4CAF50' }}>
-                                    {order.amount.toLocaleString('fr-FR')} FCFA
-                                </ThemedText>
-                            </View>
-                        </View>
-                    </View>
-                ))}
-
-                {/* Totaux */}
-                <View style={[styles.summaryBox, { backgroundColor: '#2196F3', marginTop: 16 }]}>
-                    <ThemedText variate="subtitle1" style={{ color: 'white', marginBottom: 12, fontWeight: 'bold' }}>
-                        TOTAL JOURNÉE
-                    </ThemedText>
-                    <View style={styles.summaryRow}>
-                        <ThemedText variate="body1" style={{ color: 'white' }}>
-                            Commandes traitées:
-                        </ThemedText>
-                        <ThemedText variate="h2" style={{ color: 'white', fontWeight: 'bold' }}>
-                            {mockOrderSummary.length}
-                        </ThemedText>
-                    </View>
-                    <View style={styles.summaryRow}>
-                        <ThemedText variate="body1" style={{ color: 'white' }}>
-                            Poids total:
-                        </ThemedText>
-                        <ThemedText variate="h2" style={{ color: 'white', fontWeight: 'bold' }}>
-                            {totalWeight.toFixed(1)} kg
-                        </ThemedText>
-                    </View>
-                    <View style={[styles.summaryRow, { paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.3)', marginTop: 8 }]}>
-                        <ThemedText variate="body1" style={{ color: 'white' }}>
-                            Montant total:
-                        </ThemedText>
-                        <ThemedText variate="h1" style={{ color: 'white', fontWeight: 'bold' }}>
-                            {totalAmount.toLocaleString('fr-FR')} FCFA
-                        </ThemedText>
-                    </View>
-                </View>
-
-                {/* Statistiques de production */}
-                <View style={{ marginTop: 16 }}>
-                    <ThemedText variate="subtitle1" color="textPrimary" style={{ marginBottom: 12, fontWeight: 'bold' }}>
-                        Statistiques de production
-                    </ThemedText>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <View style={[styles.statCard, { backgroundColor: '#E3F2FD', flex: 1 }]}>
-                            <ThemedText variate="caption" color="textSecondary" style={{ marginBottom: 4 }}>
-                                Cycles lavage
-                            </ThemedText>
-                            <ThemedText variate="h2" color="textPrimary" style={{ fontWeight: 'bold' }}>
-                                3
-                            </ThemedText>
-                            <ThemedText variate="caption" color="textSecondary">
-                                370L eau
-                            </ThemedText>
-                        </View>
-                        <View style={[styles.statCard, { backgroundColor: '#E8F5E9', flex: 1 }]}>
-                            <ThemedText variate="caption" color="textSecondary" style={{ marginBottom: 4 }}>
-                                Cycles séchage
-                            </ThemedText>
-                            <ThemedText variate="h2" color="textPrimary" style={{ fontWeight: 'bold' }}>
-                                3
-                            </ThemedText>
-                            <ThemedText variate="caption" color="textSecondary">
-                                51 kWh
-                            </ThemedText>
-                        </View>
-                        <View style={[styles.statCard, { backgroundColor: '#FCE4EC', flex: 1 }]}>
-                            <ThemedText variate="caption" color="textSecondary" style={{ marginBottom: 4 }}>
-                                Cycles caland.
-                            </ThemedText>
-                            <ThemedText variate="h2" color="textPrimary" style={{ fontWeight: 'bold' }}>
-                                3
-                            </ThemedText>
-                            <ThemedText variate="caption" color="textSecondary">
-                                59 kWh
-                            </ThemedText>
-                        </View>
-                    </View>
-                </View>
-
-                <View style={styles.buttonRow}>
-                    <Button title="Retour" onPress={onBack} variant="outline" style={{ flex: 1 }} />
-                    <View style={{ width: 12 }} />
-                    <Button title="Terminer la journée" onPress={handleFinish} style={{ flex: 1 }} />
-                </View>
-            </Card>
-        </ScrollView>
-    );
-}
+/* ---------- styles ---------- */
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
+    container: { flex: 1 },
+    header: {
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
     },
-    progressBar: {
-        backgroundColor: 'white',
-        paddingVertical: 16,
-        paddingHorizontal: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E0E0E0',
+    headerSub: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 2,
     },
-    stepItem: {
-        alignItems: 'center',
-        marginHorizontal: 8,
-        position: 'relative',
+
+    // Stepper
+    stepperWrap: {
+        paddingVertical: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
     },
+    stepperRow: { paddingHorizontal: 16, gap: 18 },
+    stepperItem: { alignItems: "center", minWidth: 60 },
     stepCircle: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    stepIcon: {
-        fontSize: 24,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: "center",
+        justifyContent: "center",
     },
     stepLabel: {
-        fontSize: 10,
-        textAlign: 'center',
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.micro,
+        marginTop: 6,
     },
-    stepLine: {
-        position: 'absolute',
-        top: 25,
-        left: 50,
-        width: 40,
-        height: 2,
+    stepIndex: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.micro,
+        marginTop: 1,
+        letterSpacing: 0.5,
     },
-    content: {
-        flex: 1,
+
+    content: { padding: 16, paddingBottom: 120 },
+    sectionLabel: { marginBottom: 10, marginTop: 18, paddingLeft: 4 },
+
+    // Step header
+    stepHeader: { marginBottom: 6 },
+    stepHeaderCaps: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.micro,
+        letterSpacing: 1.2,
+        textTransform: "uppercase",
     },
-    orderCard: {
-        borderWidth: 2,
-        borderRadius: 12,
-        padding: 12,
-        marginBottom: 12,
+    stepHeaderTitle: {
+        fontFamily: FontFamily.serifMedium,
+        fontSize: 22,
+        letterSpacing: -0.3,
+        marginTop: 4,
     },
-    orderHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
+    stepHeaderSub: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 4,
+    },
+
+    // Pick rows (Step 1)
+    pickRow: {
+        flexDirection: "row",
+        alignItems: "center",
         gap: 12,
+        padding: 14,
+        borderRadius: 14,
     },
     checkbox: {
-        width: 24,
-        height: 24,
-        borderWidth: 2,
-        borderColor: '#2196F3',
-        borderRadius: 4,
-        justifyContent: 'center',
-        alignItems: 'center',
+        width: 22,
+        height: 22,
+        borderRadius: 6,
+        borderWidth: 1.5,
+        alignItems: "center",
+        justifyContent: "center",
     },
-    infoBox: {
-        backgroundColor: '#F5F5F5',
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 24,
+    pickClient: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
     },
-    buttonRow: {
-        flexDirection: 'row',
-        marginTop: 8,
+    pickMeta: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 2,
     },
-    summaryBox: {
-        backgroundColor: '#F5F5F5',
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 24,
+
+    // Client context (Step 2-3)
+    clientCtx: { marginTop: 14, marginBottom: 14 },
+    clientCtxRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+    clientCtxName: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
+    },
+    clientCtxSub: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 3,
+    },
+
+    // Weighing (Step 2)
+    weighingRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        paddingVertical: 12,
+        paddingHorizontal: 14,
         gap: 12,
     },
-    summaryRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+    weighType: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
     },
-    // New styles for enhanced steps
-    statCard: {
-        padding: 12,
-        borderRadius: 8,
-        alignItems: 'center',
+    weighQty: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 2,
     },
-    batchCard: {
-        backgroundColor: 'white',
-        borderWidth: 1,
-        borderColor: '#E0E0E0',
+    weighInput: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 10,
+        borderWidth: 1.5,
+        minWidth: 100,
+    },
+    weighInputText: {
+        flex: 1,
+        fontFamily: FontFamily.monoMedium,
+        fontSize: Typography.fontSize.md,
+        padding: 0,
+        minWidth: 40,
+    },
+    weighUnit: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.tiny,
+    },
+
+    // Total card (Step 2)
+    totalCard: {
+        flexDirection: "row",
+        alignItems: "center",
+        marginBottom: 14,
+    },
+    totalCaps: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.micro,
+        letterSpacing: 1.2,
+        textTransform: "uppercase",
+    },
+    totalPieces: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 3,
+    },
+    totalValue: {
+        fontFamily: FontFamily.serifMedium,
+        fontSize: 28,
+        letterSpacing: -0.5,
+    },
+    totalUnit: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.md,
+    },
+
+    // Verify (Step 3)
+    verifyRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+    },
+    verifyQty: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
+    },
+    verifyWeight: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 2,
+    },
+    verifyDot: {
+        width: 24,
+        height: 24,
         borderRadius: 12,
-        padding: 12,
-        marginBottom: 12,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    verifyBanner: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        marginBottom: 14,
+    },
+    verifyBannerText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
+    },
+
+    // Dispatch (Step 4-6)
+    dispatchKpiRow: {
+        flexDirection: "row",
+        gap: 10,
+        marginTop: 14,
+    },
+    kpiChip: {
+        flex: 1,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+    },
+    kpiChipValue: {
+        fontFamily: FontFamily.serifMedium,
+        fontSize: 18,
+        letterSpacing: -0.3,
+    },
+    kpiChipLabel: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
+        marginTop: 2,
+    },
+
+    // Batches
+    batchHeader: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        gap: 10,
+    },
+    batchCycle: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
+    },
+    batchMachine: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 2,
+    },
+    batchProgram: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
+        marginTop: 1,
+    },
+    utilBadge: {
+        paddingHorizontal: 9,
+        paddingVertical: 4,
+        borderRadius: 999,
+    },
+    utilBadgeText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.micro,
     },
     batchItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
         paddingVertical: 6,
-        paddingHorizontal: 8,
-        backgroundColor: '#F5F5F5',
-        borderRadius: 6,
-        marginBottom: 4,
+        paddingHorizontal: 10,
+        borderRadius: 8,
     },
-    badge: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
-        alignSelf: 'flex-start',
+    batchItemType: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.tiny,
     },
-    orderSummaryCard: {
-        backgroundColor: '#F9F9F9',
-        borderWidth: 1,
-        borderColor: '#E0E0E0',
+    batchItemQty: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.tiny,
+    },
+    batchFooter: {
+        flexDirection: "row",
+        gap: 14,
+        marginTop: 10,
+        paddingTop: 10,
+        borderTopWidth: StyleSheet.hairlineWidth,
+    },
+    metaItem: { flexDirection: "row", alignItems: "center", gap: 4 },
+    metaText: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.micro,
+    },
+    consumptionCard: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        marginTop: 14,
+    },
+    consumptionText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
+    },
+
+    // CTAs
+    ctaRow: {
+        flexDirection: "row",
+        gap: 10,
+        marginTop: 18,
+    },
+    backBtn: {
+        flex: 1,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+        paddingVertical: 14,
         borderRadius: 12,
+        borderWidth: StyleSheet.hairlineWidth,
+    },
+    backBtnText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
+    },
+    nextBtn: {
+        flex: 2,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        paddingVertical: 14,
+        borderRadius: 12,
+    },
+    nextBtnText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
+    },
+
+    // Summary (Step 7)
+    summaryHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+    },
+    summaryIndex: {
+        fontFamily: FontFamily.monoMedium,
+        fontSize: Typography.fontSize.tiny,
+    },
+    summaryClient: {
+        flex: 1,
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
+    },
+    summaryFooter: {
+        flexDirection: "row",
+        gap: 10,
+        marginTop: 10,
+        paddingTop: 10,
+        borderTopWidth: StyleSheet.hairlineWidth,
+    },
+    summaryLabel: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
+    },
+    summaryValue: {
+        fontFamily: FontFamily.monoMedium,
+        fontSize: Typography.fontSize.md,
+        marginTop: 3,
+    },
+    summaryAmount: {
+        fontFamily: FontFamily.monoMedium,
+        fontSize: Typography.fontSize.md,
+        marginTop: 3,
+    },
+
+    grandTotal: { marginTop: 14 },
+    grandCaps: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.micro,
+        letterSpacing: 1.2,
+        textTransform: "uppercase",
+    },
+    grandValue: {
+        fontFamily: FontFamily.serifMedium,
+        fontSize: 36,
+        letterSpacing: -0.8,
+        marginTop: 6,
+    },
+    grandRow: {
+        flexDirection: "row",
+        gap: 20,
+        marginTop: 14,
+        paddingTop: 14,
+        borderTopWidth: StyleSheet.hairlineWidth,
+    },
+    grandLabel: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
+    },
+    grandNumber: {
+        fontFamily: FontFamily.monoMedium,
+        fontSize: Typography.fontSize.lg,
+        marginTop: 3,
+    },
+
+    prodStatsRow: { flexDirection: "row", gap: 10 },
+    prodStatTile: {
+        flex: 1,
         padding: 12,
-        marginBottom: 12,
+        borderRadius: 12,
+        borderWidth: StyleSheet.hairlineWidth,
     },
-    weighingItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+    prodStatIcon: {
+        width: 28,
+        height: 28,
+        borderRadius: 8,
+        alignItems: "center",
+        justifyContent: "center",
+        marginBottom: 10,
+    },
+    prodStatValue: {
+        fontFamily: FontFamily.serifMedium,
+        fontSize: 20,
+        letterSpacing: -0.3,
+    },
+    prodStatLabel: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
+        marginTop: 2,
+    },
+    prodStatFooter: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.micro,
+        marginTop: 5,
+    },
+
+    finishBtn: {
+        marginTop: 18,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        paddingVertical: 14,
+        borderRadius: 12,
+    },
+    finishBtnText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.base,
+    },
+    secondaryBtn: {
+        marginTop: 10,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
         paddingVertical: 12,
-        paddingHorizontal: 16,
-        backgroundColor: '#F9F9F9',
-        borderRadius: 8,
-        marginBottom: 8,
-        borderWidth: 1,
-        borderColor: '#E0E0E0',
+        borderRadius: 12,
+        borderWidth: StyleSheet.hairlineWidth,
     },
-    weightInput: {
-        backgroundColor: 'white',
-        borderWidth: 2,
-        borderColor: '#2196F3',
-        borderRadius: 8,
-        padding: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: 40,
+    secondaryBtnText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
     },
 });
