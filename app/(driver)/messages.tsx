@@ -1,20 +1,23 @@
-import React, { useState } from 'react';
+import { useState } from "react";
 import {
-    View,
-    Text,
-    StyleSheet,
-    ScrollView,
-    TouchableOpacity,
-    SafeAreaView,
-    TextInput,
     FlatList,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { useThemeColors } from '@/hooks/useThemeColors';
-import Card from '@/components/ui/Card';
-import ThemedText from '@/components/ui/ThemedText';
-import { Spacing } from '@/constants/Spacing';
-import { Typography } from '@/constants/Typography';
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+import Card from "@/components/ui/Card";
+import Icon, { IconName } from "@/components/ui/Icon";
+import StatusBadge from "@/components/ui/StatusBadge";
+import ThemedText from "@/components/ui/ThemedText";
+import { FontFamily, Typography } from "@/constants/Typography";
+import { useThemeColors } from "@/hooks/useThemeColors";
+
+type Tab = "messages" | "incidents" | "checklist";
 
 type Message = {
     id: string;
@@ -31,377 +34,392 @@ type ChecklistItem = {
     completed: boolean;
 };
 
+const TABS: { key: Tab; label: string; icon: IconName }[] = [
+    { key: "messages", label: "Messages", icon: "msg" },
+    { key: "incidents", label: "Incidents", icon: "alert" },
+    { key: "checklist", label: "Checklist", icon: "check" },
+];
+
 export default function MessagesScreen() {
-    const router = useRouter();
     const colors = useThemeColors();
 
-    const [activeTab, setActiveTab] = useState<'messages' | 'incidents' | 'checklist'>('messages');
-    const [messageInput, setMessageInput] = useState('');
-    const [incidentSubject, setIncidentSubject] = useState('');
-    const [incidentDescription, setIncidentDescription] = useState('');
+    const [activeTab, setActiveTab] = useState<Tab>("messages");
+    const [messageInput, setMessageInput] = useState("");
+    const [incidentSubject, setIncidentSubject] = useState("");
+    const [incidentDescription, setIncidentDescription] = useState("");
 
     const [messages, setMessages] = useState<Message[]>([
         {
-            id: '1',
-            sender: 'Superviseur',
-            text: 'Bonjour! N\'oubliez pas de prendre des photos à chaque collecte.',
-            time: '08:15',
+            id: "1",
+            sender: "Superviseur",
+            text: "Bonjour ! N'oubliez pas de prendre des photos à chaque collecte.",
+            time: "08:15",
             isOwn: false,
             isUrgent: true,
         },
         {
-            id: '2',
-            sender: 'Vous',
-            text: 'Compris, merci!',
-            time: '08:17',
+            id: "2",
+            sender: "Vous",
+            text: "Compris, merci.",
+            time: "08:17",
             isOwn: true,
         },
         {
-            id: '3',
-            sender: 'Équipe',
-            text: 'Le client King Fahd Palace a une livraison supplémentaire.',
-            time: '09:30',
+            id: "3",
+            sender: "Équipe",
+            text: "Le client King Fahd Palace a une livraison supplémentaire.",
+            time: "09:30",
             isOwn: false,
         },
         {
-            id: '4',
-            sender: 'Vous',
-            text: 'OK, je vais m\'en occuper.',
-            time: '09:32',
+            id: "4",
+            sender: "Vous",
+            text: "OK, je vais m'en occuper.",
+            time: "09:32",
             isOwn: true,
         },
     ]);
 
     const [checklist, setChecklist] = useState<ChecklistItem[]>([
-        { id: '1', text: 'Vérifier le niveau de carburant', completed: true },
-        { id: '2', text: 'Nettoyer le véhicule', completed: true },
-        { id: '3', text: 'Charger le téléphone', completed: true },
-        { id: '4', text: 'Préparer les documents de collecte', completed: false },
-        { id: '5', text: 'Vérifier les équipements (scanner, appareil photo)', completed: false },
-        { id: '6', text: 'Confirmer toutes les adresses de livraison', completed: false },
+        { id: "1", text: "Vérifier le niveau de carburant", completed: true },
+        { id: "2", text: "Nettoyer le véhicule", completed: true },
+        { id: "3", text: "Charger le téléphone", completed: true },
+        { id: "4", text: "Préparer les documents de collecte", completed: false },
+        { id: "5", text: "Vérifier scanner et appareil photo", completed: false },
+        { id: "6", text: "Confirmer les adresses de livraison", completed: false },
     ]);
 
     const handleSendMessage = () => {
-        if (messageInput.trim()) {
-            const newMessage: Message = {
-                id: Date.now().toString(),
-                sender: 'Vous',
-                text: messageInput,
-                time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-                isOwn: true,
-            };
-            setMessages([...messages, newMessage]);
-            setMessageInput('');
-        }
+        if (!messageInput.trim()) return;
+        const newMessage: Message = {
+            id: Date.now().toString(),
+            sender: "Vous",
+            text: messageInput,
+            time: new Date().toLocaleTimeString("fr-FR", {
+                hour: "2-digit",
+                minute: "2-digit",
+            }),
+            isOwn: true,
+        };
+        setMessages((prev) => [...prev, newMessage]);
+        setMessageInput("");
     };
 
-    const handleToggleChecklistItem = (id: string) => {
-        setChecklist(checklist.map(item =>
-            item.id === id ? { ...item, completed: !item.completed } : item
-        ));
+    const toggleChecklistItem = (id: string) => {
+        setChecklist((prev) =>
+            prev.map((it) =>
+                it.id === id ? { ...it, completed: !it.completed } : it,
+            ),
+        );
     };
 
-    const completedCount = checklist.filter(item => item.completed).length;
-    const totalCount = checklist.length;
-    const progress = (completedCount / totalCount) * 100;
+    const completedCount = checklist.filter((it) => it.completed).length;
+    const progress = completedCount / checklist.length;
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            {/* Header */}
-            <View style={styles.header}>
-                <ThemedText variate="headline" color="textPrimary">
-                    Communications
-                </ThemedText>
+        <SafeAreaView
+            edges={["top"]}
+            style={[styles.container, { backgroundColor: colors.paper2 }]}
+        >
+            <View
+                style={[
+                    styles.header,
+                    { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
+                ]}
+            >
+                <ThemedText variate="title">Communications</ThemedText>
             </View>
 
-            {/* Tabs */}
-            <View style={styles.tabsContainer}>
-                <TouchableOpacity
-                    style={[
-                        styles.tab,
-                        activeTab === 'messages' && { borderBottomColor: colors.driverPrimary, borderBottomWidth: 3 },
-                    ]}
-                    onPress={() => setActiveTab('messages')}
-                >
-                    <Text style={styles.tabIcon}>💬</Text>
-                    <ThemedText
-                        variate="body3"
-                        style={{
-                            color: activeTab === 'messages' ? colors.driverPrimary : colors.textSecondary,
-                            fontWeight: activeTab === 'messages' ? Typography.fontWeight.semibold : Typography.fontWeight.regular,
-                        }}
-                    >
-                        Messages
-                    </ThemedText>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[
-                        styles.tab,
-                        activeTab === 'incidents' && { borderBottomColor: colors.driverPrimary, borderBottomWidth: 3 },
-                    ]}
-                    onPress={() => setActiveTab('incidents')}
-                >
-                    <Text style={styles.tabIcon}>⚠️</Text>
-                    <ThemedText
-                        variate="body3"
-                        style={{
-                            color: activeTab === 'incidents' ? colors.driverPrimary : colors.textSecondary,
-                            fontWeight: activeTab === 'incidents' ? Typography.fontWeight.semibold : Typography.fontWeight.regular,
-                        }}
-                    >
-                        Incidents
-                    </ThemedText>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[
-                        styles.tab,
-                        activeTab === 'checklist' && { borderBottomColor: colors.driverPrimary, borderBottomWidth: 3 },
-                    ]}
-                    onPress={() => setActiveTab('checklist')}
-                >
-                    <Text style={styles.tabIcon}>✓</Text>
-                    <ThemedText
-                        variate="body3"
-                        style={{
-                            color: activeTab === 'checklist' ? colors.driverPrimary : colors.textSecondary,
-                            fontWeight: activeTab === 'checklist' ? Typography.fontWeight.semibold : Typography.fontWeight.regular,
-                        }}
-                    >
-                        Checklist
-                    </ThemedText>
-                </TouchableOpacity>
+            {/* Pill tabs */}
+            <View
+                style={[
+                    styles.tabsWrapper,
+                    { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
+                ]}
+            >
+                {TABS.map((t) => {
+                    const active = activeTab === t.key;
+                    return (
+                        <Pressable
+                            key={t.key}
+                            onPress={() => setActiveTab(t.key)}
+                            style={[
+                                styles.tab,
+                                {
+                                    backgroundColor: active ? colors.brand800 : colors.paper2,
+                                    borderColor: active ? colors.brand800 : colors.ink200,
+                                },
+                            ]}
+                        >
+                            <Icon
+                                name={t.icon}
+                                size={13}
+                                color={active ? colors.paper : colors.ink700}
+                            />
+                            <Text
+                                style={[
+                                    styles.tabLabel,
+                                    { color: active ? colors.paper : colors.ink700 },
+                                ]}
+                            >
+                                {t.label}
+                            </Text>
+                        </Pressable>
+                    );
+                })}
             </View>
 
-            {/* Messages Tab */}
-            {activeTab === 'messages' && (
+            {/* Messages */}
+            {activeTab === "messages" && (
                 <View style={{ flex: 1 }}>
                     <FlatList
                         data={messages}
-                        keyExtractor={item => item.id}
+                        keyExtractor={(item) => item.id}
                         contentContainerStyle={styles.messagesList}
-                        renderItem={({ item }) => (
-                            <View
-                                style={[
-                                    styles.messageItem,
-                                    item.isOwn && styles.messageItemOwn,
-                                ]}
-                            >
-                                <View
-                                    style={[
-                                        styles.messageBubble,
-                                        item.isOwn && { backgroundColor: colors.driverPrimary },
-                                        !item.isOwn && { backgroundColor: '#F3F4F6' },
-                                        item.isUrgent && !item.isOwn && { borderColor: '#DC2626', borderWidth: 2 },
-                                    ]}
-                                >
-                                    {!item.isOwn && (
-                                        <ThemedText
-                                            variate="caption"
-                                            style={{
-                                                color: item.isUrgent ? '#DC2626' : colors.driverPrimary,
-                                                fontWeight: Typography.fontWeight.semibold,
-                                                marginBottom: Spacing.xs,
-                                            }}
-                                        >
-                                            {item.sender} {item.isUrgent && '🔴'}
-                                        </ThemedText>
-                                    )}
-                                    <ThemedText
-                                        variate="body3"
-                                        style={{ color: item.isOwn ? '#FFFFFF' : colors.textPrimary }}
-                                    >
-                                        {item.text}
-                                    </ThemedText>
-                                    <ThemedText
-                                        variate="caption"
-                                        style={{
-                                            color: item.isOwn ? '#FFFFFF' : colors.textSecondary,
-                                            marginTop: Spacing.xs,
-                                            opacity: 0.7,
-                                        }}
-                                    >
-                                        {item.time}
-                                    </ThemedText>
-                                </View>
-                            </View>
-                        )}
+                        renderItem={({ item }) => <Bubble message={item} />}
                     />
 
-                    {/* Message Input */}
-                    <View style={[styles.inputContainer, { borderTopColor: colors.border }]}>
+                    <View
+                        style={[
+                            styles.inputBar,
+                            {
+                                backgroundColor: colors.paper,
+                                borderTopColor: colors.ink200,
+                            },
+                        ]}
+                    >
                         <TextInput
-                            style={[styles.messageInput, { color: colors.textPrimary, borderColor: colors.border }]}
-                            placeholder="Écrire un message..."
-                            placeholderTextColor={colors.textSecondary}
                             value={messageInput}
                             onChangeText={setMessageInput}
+                            placeholder="Écrire un message…"
+                            placeholderTextColor={colors.ink400}
                             multiline
+                            style={[
+                                styles.messageInput,
+                                {
+                                    backgroundColor: colors.paper2,
+                                    borderColor: colors.ink200,
+                                    color: colors.ink900,
+                                },
+                            ]}
                         />
-                        <TouchableOpacity
-                            style={[styles.sendButton, { backgroundColor: colors.driverPrimary }]}
+                        <Pressable
                             onPress={handleSendMessage}
+                            style={[
+                                styles.sendBtn,
+                                { backgroundColor: colors.brand800 },
+                            ]}
                         >
-                            <Text style={styles.sendButtonText}>➤</Text>
-                        </TouchableOpacity>
+                            <Icon name="arrowRight" size={15} color={colors.paper} />
+                        </Pressable>
                     </View>
                 </View>
             )}
 
-            {/* Incidents Tab */}
-            {activeTab === 'incidents' && (
-                <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
-                    <Card style={styles.incidentCard}>
-                        <View style={styles.incidentHeader}>
-                            <Text style={styles.incidentIcon}>⚠️</Text>
-                            <ThemedText variate="subtitle2" color="textPrimary">
-                                Signaler un incident
-                            </ThemedText>
-                        </View>
-
-                        <ThemedText variate="caption" color="textSecondary" style={{ marginBottom: Spacing.md }}>
-                            Utilisez ce formulaire pour signaler tout problème rencontré pendant votre tournée.
-                        </ThemedText>
-
-                        <View style={styles.incidentForm}>
-                            <ThemedText variate="body3" color="textPrimary" style={{ marginBottom: Spacing.xs }}>
-                                Type d'incident
-                            </ThemedText>
-                            <TextInput
-                                style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]}
-                                placeholder="Ex: Retard, Véhicule en panne, Client absent..."
-                                placeholderTextColor={colors.textSecondary}
-                                value={incidentSubject}
-                                onChangeText={setIncidentSubject}
-                            />
-
-                            <ThemedText variate="body3" color="textPrimary" style={{ marginBottom: Spacing.xs, marginTop: Spacing.md }}>
-                                Description détaillée
-                            </ThemedText>
-                            <TextInput
-                                style={[styles.input, styles.textArea, { color: colors.textPrimary, borderColor: colors.border }]}
-                                placeholder="Décrivez l'incident en détail..."
-                                placeholderTextColor={colors.textSecondary}
-                                multiline
-                                numberOfLines={6}
-                                value={incidentDescription}
-                                onChangeText={setIncidentDescription}
-                            />
-
-                            <TouchableOpacity
-                                style={[styles.reportButton, { backgroundColor: '#DC2626' }]}
+            {/* Incidents */}
+            {activeTab === "incidents" && (
+                <ScrollView
+                    contentContainerStyle={styles.content}
+                    showsVerticalScrollIndicator={false}
+                >
+                    <Card padding={16} style={{ marginBottom: 14 }}>
+                        <View style={styles.incidentHead}>
+                            <View
+                                style={[
+                                    styles.incidentIcon,
+                                    { backgroundColor: colors.danger100 },
+                                ]}
                             >
-                                <Text style={styles.reportButtonText}>📢 Envoyer le rapport</Text>
-                            </TouchableOpacity>
+                                <Icon name="alert" size={14} color={colors.danger600} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text
+                                    style={[styles.incidentTitle, { color: colors.ink900 }]}
+                                >
+                                    Signaler un incident
+                                </Text>
+                                <Text
+                                    style={[styles.incidentSub, { color: colors.ink500 }]}
+                                >
+                                    Retard, panne, client absent, etc.
+                                </Text>
+                            </View>
                         </View>
+
+                        <Text style={[styles.fieldLabel, { color: colors.ink700 }]}>
+                            Type d'incident
+                        </Text>
+                        <TextInput
+                            value={incidentSubject}
+                            onChangeText={setIncidentSubject}
+                            placeholder="Ex : Véhicule en panne"
+                            placeholderTextColor={colors.ink400}
+                            style={[
+                                styles.input,
+                                {
+                                    backgroundColor: colors.paper,
+                                    borderColor: colors.ink200,
+                                    color: colors.ink900,
+                                },
+                            ]}
+                        />
+
+                        <Text
+                            style={[
+                                styles.fieldLabel,
+                                { color: colors.ink700, marginTop: 12 },
+                            ]}
+                        >
+                            Description détaillée
+                        </Text>
+                        <TextInput
+                            value={incidentDescription}
+                            onChangeText={setIncidentDescription}
+                            placeholder="Décrivez l'incident en détail…"
+                            placeholderTextColor={colors.ink400}
+                            multiline
+                            numberOfLines={5}
+                            style={[
+                                styles.textArea,
+                                {
+                                    backgroundColor: colors.paper,
+                                    borderColor: colors.ink200,
+                                    color: colors.ink900,
+                                },
+                            ]}
+                        />
+
+                        <Pressable
+                            style={[
+                                styles.reportBtn,
+                                { backgroundColor: colors.danger600 },
+                            ]}
+                        >
+                            <Icon name="alert" size={14} color={colors.paper} />
+                            <Text
+                                style={[styles.reportBtnText, { color: colors.paper }]}
+                            >
+                                Envoyer le rapport
+                            </Text>
+                        </Pressable>
                     </Card>
 
-                    {/* Recent Incidents */}
-                    <View style={styles.recentIncidents}>
-                        <ThemedText variate="subtitle2" color="textPrimary" style={{ marginBottom: Spacing.md }}>
-                            Incidents récents
-                        </ThemedText>
+                    <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
+                        Incidents récents
+                    </ThemedText>
 
-                        <Card style={styles.incidentItem}>
-                            <View style={styles.incidentItemHeader}>
-                                <View style={[styles.incidentBadge, { backgroundColor: '#FEF2F2' }]}>
-                                    <Text style={[styles.incidentBadgeText, { color: '#DC2626' }]}>
-                                        Résolu
-                                    </Text>
-                                </View>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    23 Déc 2024, 14:30
-                                </ThemedText>
-                            </View>
-                            <ThemedText variate="subtitle3" color="textPrimary" style={{ marginTop: Spacing.xs }}>
-                                Client absent
-                            </ThemedText>
-                            <ThemedText variate="caption" color="textSecondary">
-                                Le client Hôtel Teranga était absent. J'ai laissé un avis de passage.
-                            </ThemedText>
-                        </Card>
-
-                        <Card style={styles.incidentItem}>
-                            <View style={styles.incidentItemHeader}>
-                                <View style={[styles.incidentBadge, { backgroundColor: '#FFF7ED' }]}>
-                                    <Text style={[styles.incidentBadgeText, { color: '#EA580C' }]}>
-                                        En cours
-                                    </Text>
-                                </View>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    22 Déc 2024, 09:15
-                                </ThemedText>
-                            </View>
-                            <ThemedText variate="subtitle3" color="textPrimary" style={{ marginTop: Spacing.xs }}>
-                                Embouteillage
-                            </ThemedText>
-                            <ThemedText variate="caption" color="textSecondary">
-                                Retard de 30 minutes dû à un embouteillage sur la Corniche.
-                            </ThemedText>
-                        </Card>
+                    <View style={{ gap: 10 }}>
+                        <IncidentRow
+                            status="Validée"
+                            title="Client absent"
+                            desc="Le client Hôtel Teranga était absent. J'ai laissé un avis de passage."
+                            date="23 déc. 2024 · 14:30"
+                        />
+                        <IncidentRow
+                            status="En attente"
+                            title="Embouteillage"
+                            desc="Retard de 30 minutes dû à un embouteillage sur la Corniche."
+                            date="22 déc. 2024 · 09:15"
+                        />
                     </View>
                 </ScrollView>
             )}
 
-            {/* Checklist Tab */}
-            {activeTab === 'checklist' && (
-                <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
-                    {/* Progress Card */}
-                    <Card style={styles.progressCard}>
-                        <View style={styles.progressHeader}>
-                            <ThemedText variate="subtitle2" color="textPrimary">
-                                Checklist du jour
-                            </ThemedText>
-                            <ThemedText variate="subtitle2" style={{ color: colors.driverPrimary }}>
-                                {completedCount}/{totalCount}
-                            </ThemedText>
+            {/* Checklist */}
+            {activeTab === "checklist" && (
+                <ScrollView
+                    contentContainerStyle={styles.content}
+                    showsVerticalScrollIndicator={false}
+                >
+                    <Card padding={16} style={{ marginBottom: 14 }}>
+                        <View style={styles.checklistHeader}>
+                            <View style={{ flex: 1 }}>
+                                <Text
+                                    style={[styles.checklistTitle, { color: colors.ink900 }]}
+                                >
+                                    Checklist du jour
+                                </Text>
+                                <Text
+                                    style={[styles.checklistSub, { color: colors.ink500 }]}
+                                >
+                                    À compléter avant la tournée
+                                </Text>
+                            </View>
+                            <Text
+                                style={[styles.checklistCount, { color: colors.ink900 }]}
+                            >
+                                {completedCount}
+                                <Text
+                                    style={[
+                                        styles.checklistDiv,
+                                        { color: colors.ink500 },
+                                    ]}
+                                >
+                                    {` / ${checklist.length}`}
+                                </Text>
+                            </Text>
                         </View>
-                        <View style={styles.progressBar}>
+                        <View
+                            style={[styles.progressBar, { backgroundColor: colors.ink200 }]}
+                        >
                             <View
                                 style={[
                                     styles.progressFill,
                                     {
-                                        width: `${progress}%`,
-                                        backgroundColor: colors.driverPrimary,
+                                        width: `${progress * 100}%`,
+                                        backgroundColor: colors.baobab600,
                                     },
                                 ]}
                             />
                         </View>
-                        <ThemedText variate="caption" color="textSecondary" style={{ marginTop: Spacing.sm }}>
-                            Complétez tous les items avant de commencer votre tournée
-                        </ThemedText>
                     </Card>
 
-                    {/* Checklist Items */}
-                    <Card style={styles.checklistCard}>
-                        {checklist.map((item) => (
-                            <TouchableOpacity
+                    <Card padding={0} style={{ overflow: "hidden" }}>
+                        {checklist.map((item, i) => (
+                            <Pressable
                                 key={item.id}
-                                style={styles.checklistItem}
-                                onPress={() => handleToggleChecklistItem(item.id)}
+                                onPress={() => toggleChecklistItem(item.id)}
+                                style={[
+                                    styles.checklistRow,
+                                    i < checklist.length - 1 && {
+                                        borderBottomColor: colors.ink200,
+                                        borderBottomWidth: StyleSheet.hairlineWidth,
+                                    },
+                                ]}
                             >
                                 <View
                                     style={[
                                         styles.checkbox,
-                                        item.completed && { backgroundColor: colors.driverPrimary },
+                                        {
+                                            backgroundColor: item.completed
+                                                ? colors.baobab600
+                                                : "transparent",
+                                            borderColor: item.completed
+                                                ? colors.baobab600
+                                                : colors.ink300,
+                                        },
                                     ]}
                                 >
                                     {item.completed && (
-                                        <Text style={styles.checkmark}>✓</Text>
+                                        <Icon name="check" size={12} color={colors.paper} />
                                     )}
                                 </View>
-                                <ThemedText
-                                    variate="body3"
-                                    style={{
-                                        color: item.completed ? colors.textSecondary : colors.textPrimary,
-                                        textDecorationLine: item.completed ? 'line-through' : 'none',
-                                        flex: 1,
-                                    }}
+                                <Text
+                                    style={[
+                                        styles.checklistText,
+                                        {
+                                            color: item.completed
+                                                ? colors.ink500
+                                                : colors.ink900,
+                                            textDecorationLine: item.completed
+                                                ? "line-through"
+                                                : "none",
+                                        },
+                                    ]}
                                 >
                                     {item.text}
-                                </ThemedText>
-                            </TouchableOpacity>
+                                </Text>
+                            </Pressable>
                         ))}
                     </Card>
                 </ScrollView>
@@ -410,179 +428,318 @@ export default function MessagesScreen() {
     );
 }
 
+/* ---------- sous-composants ---------- */
+
+function Bubble({ message }: { message: Message }) {
+    const colors = useThemeColors();
+    const own = message.isOwn;
+    const urgent = message.isUrgent;
+
+    return (
+        <View style={[styles.bubbleRow, own && styles.bubbleRowOwn]}>
+            <View
+                style={[
+                    styles.bubble,
+                    {
+                        backgroundColor: own ? colors.brand800 : colors.paper,
+                        borderColor: urgent && !own ? colors.danger600 : colors.ink200,
+                        borderWidth: urgent && !own ? 1.5 : StyleSheet.hairlineWidth,
+                    },
+                ]}
+            >
+                {!own && (
+                    <View style={styles.bubbleSender}>
+                        <Text
+                            style={[
+                                styles.bubbleSenderText,
+                                {
+                                    color: urgent ? colors.danger600 : colors.brand800,
+                                },
+                            ]}
+                        >
+                            {message.sender}
+                        </Text>
+                        {urgent && (
+                            <View
+                                style={[
+                                    styles.urgentDot,
+                                    { backgroundColor: colors.danger600 },
+                                ]}
+                            />
+                        )}
+                    </View>
+                )}
+                <Text
+                    style={[
+                        styles.bubbleText,
+                        { color: own ? colors.paper : colors.ink900 },
+                    ]}
+                >
+                    {message.text}
+                </Text>
+                <Text
+                    style={[
+                        styles.bubbleTime,
+                        {
+                            color: own ? colors.brand100 : colors.ink500,
+                        },
+                    ]}
+                >
+                    {message.time}
+                </Text>
+            </View>
+        </View>
+    );
+}
+
+function IncidentRow({
+    status,
+    title,
+    desc,
+    date,
+}: {
+    status: "Validée" | "En attente" | "En retard";
+    title: string;
+    desc: string;
+    date: string;
+}) {
+    const colors = useThemeColors();
+    return (
+        <Card padding={14}>
+            <View style={styles.incidentRowHead}>
+                <StatusBadge status={status} />
+                <Text style={[styles.incidentDate, { color: colors.ink500 }]}>
+                    {date}
+                </Text>
+            </View>
+            <Text style={[styles.incidentRowTitle, { color: colors.ink900 }]}>
+                {title}
+            </Text>
+            <Text style={[styles.incidentRowDesc, { color: colors.ink600 }]}>
+                {desc}
+            </Text>
+        </Card>
+    );
+}
+
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
+    container: { flex: 1 },
     header: {
-        paddingHorizontal: Spacing.padding.screen,
-        paddingTop: Spacing.xl,
-        paddingBottom: Spacing.md,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
     },
-    tabsContainer: {
-        flexDirection: 'row',
-        borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
+    content: { padding: 16, paddingBottom: 120 },
+    sectionLabel: { marginBottom: 10, paddingLeft: 4 },
+
+    // Tabs
+    tabsWrapper: {
+        flexDirection: "row",
+        gap: 8,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
     },
     tab: {
         flex: 1,
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        gap: Spacing.xs,
-        paddingVertical: Spacing.md,
-        borderBottomWidth: 3,
-        borderBottomColor: 'transparent',
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 5,
+        paddingVertical: 9,
+        borderRadius: 999,
+        borderWidth: StyleSheet.hairlineWidth,
     },
-    tabIcon: {
-        fontSize: 20,
+    tabLabel: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.tiny,
     },
-    content: {
-        padding: Spacing.padding.screen,
-        paddingBottom: Spacing.xxxl,
+
+    // Messages
+    messagesList: { padding: 16, paddingBottom: 16 },
+    bubbleRow: { marginBottom: 10, alignItems: "flex-start" },
+    bubbleRowOwn: { alignItems: "flex-end" },
+    bubble: {
+        maxWidth: "80%",
+        padding: 12,
+        borderRadius: 14,
     },
-    messagesList: {
-        padding: Spacing.padding.screen,
-        paddingBottom: Spacing.lg,
+    bubbleSender: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        marginBottom: 4,
     },
-    messageItem: {
-        marginBottom: Spacing.md,
-        alignItems: 'flex-start',
+    bubbleSenderText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.tiny,
     },
-    messageItemOwn: {
-        alignItems: 'flex-end',
+    urgentDot: { width: 6, height: 6, borderRadius: 3 },
+    bubbleText: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.sm,
+        lineHeight: Typography.fontSize.sm * 1.45,
     },
-    messageBubble: {
-        maxWidth: '75%',
-        padding: Spacing.md,
-        borderRadius: Spacing.borderRadius.lg,
+    bubbleTime: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.micro,
+        marginTop: 4,
     },
-    inputContainer: {
-        flexDirection: 'row',
-        alignItems: 'flex-end',
-        gap: Spacing.sm,
-        padding: Spacing.padding.screen,
-        borderTopWidth: 1,
-        backgroundColor: '#FFFFFF',
+
+    inputBar: {
+        flexDirection: "row",
+        alignItems: "flex-end",
+        gap: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderTopWidth: StyleSheet.hairlineWidth,
     },
     messageInput: {
         flex: 1,
-        borderWidth: 1,
-        borderRadius: Spacing.borderRadius.lg,
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.sm,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderRadius: 20,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        fontFamily: FontFamily.uiRegular,
         fontSize: Typography.fontSize.sm,
         maxHeight: 100,
     },
-    sendButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        justifyContent: 'center',
-        alignItems: 'center',
+    sendBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: "center",
+        justifyContent: "center",
     },
-    sendButtonText: {
-        color: '#FFFFFF',
-        fontSize: 20,
-    },
-    incidentCard: {
-        marginBottom: Spacing.lg,
-    },
-    incidentHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-        marginBottom: Spacing.sm,
+
+    // Incidents
+    incidentHead: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        marginBottom: 12,
     },
     incidentIcon: {
-        fontSize: 28,
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        alignItems: "center",
+        justifyContent: "center",
     },
-    incidentForm: {
-        marginTop: Spacing.md,
+    incidentTitle: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
+    },
+    incidentSub: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 2,
+    },
+    fieldLabel: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.tiny,
+        marginBottom: 5,
     },
     input: {
-        borderWidth: 1,
-        borderRadius: Spacing.borderRadius.md,
-        padding: Spacing.md,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        fontFamily: FontFamily.uiRegular,
         fontSize: Typography.fontSize.sm,
     },
     textArea: {
-        height: 120,
-        textAlignVertical: 'top',
-    },
-    reportButton: {
-        marginTop: Spacing.lg,
-        paddingVertical: Spacing.md,
-        borderRadius: Spacing.borderRadius.md,
-        alignItems: 'center',
-    },
-    reportButtonText: {
-        color: '#FFFFFF',
+        borderWidth: StyleSheet.hairlineWidth,
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        minHeight: 96,
+        textAlignVertical: "top",
+        fontFamily: FontFamily.uiRegular,
         fontSize: Typography.fontSize.sm,
-        fontWeight: Typography.fontWeight.semibold,
     },
-    recentIncidents: {
-        marginTop: Spacing.lg,
+    reportBtn: {
+        marginTop: 14,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+        paddingVertical: 12,
+        borderRadius: 10,
     },
-    incidentItem: {
-        marginBottom: Spacing.md,
+    reportBtnText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
     },
-    incidentItemHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+    incidentRowHead: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 8,
     },
-    incidentBadge: {
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: 2,
-        borderRadius: Spacing.borderRadius.sm,
+    incidentDate: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.micro,
     },
-    incidentBadgeText: {
-        fontSize: Typography.fontSize.xs,
-        fontWeight: Typography.fontWeight.semibold,
+    incidentRowTitle: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
     },
-    progressCard: {
-        marginBottom: Spacing.lg,
+    incidentRowDesc: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 3,
     },
-    progressHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: Spacing.sm,
+
+    // Checklist
+    checklistHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 10,
+    },
+    checklistTitle: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.md,
+    },
+    checklistSub: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 2,
+    },
+    checklistCount: {
+        fontFamily: FontFamily.monoMedium,
+        fontSize: 18,
+    },
+    checklistDiv: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.sm,
     },
     progressBar: {
-        height: 8,
-        backgroundColor: '#E5E7EB',
-        borderRadius: 4,
-        overflow: 'hidden',
+        height: 6,
+        borderRadius: 3,
+        overflow: "hidden",
     },
-    progressFill: {
-        height: '100%',
-        borderRadius: 4,
-    },
-    checklistCard: {
-        padding: 0,
-    },
-    checklistItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.md,
-        padding: Spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
+    progressFill: { height: "100%", borderRadius: 3 },
+
+    checklistRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
     },
     checkbox: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        borderWidth: 2,
-        borderColor: '#D1D5DB',
-        justifyContent: 'center',
-        alignItems: 'center',
+        width: 20,
+        height: 20,
+        borderRadius: 6,
+        borderWidth: 1.5,
+        alignItems: "center",
+        justifyContent: "center",
     },
-    checkmark: {
-        color: '#FFFFFF',
-        fontSize: 14,
-        fontWeight: Typography.fontWeight.bold,
+    checklistText: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.sm,
+        flex: 1,
     },
 });

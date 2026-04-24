@@ -1,25 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from "react";
 import {
-    View,
-    Text,
-    StyleSheet,
-    ScrollView,
-    TouchableOpacity,
-    SafeAreaView,
     Alert,
     Modal,
-    Image,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { useThemeColors } from '@/hooks/useThemeColors';
-import Card from '@/components/ui/Card';
-import ThemedText from '@/components/ui/ThemedText';
-import Button from '@/components/ui/Button';
-import { Spacing } from '@/constants/Spacing';
-import { Typography } from '@/constants/Typography';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Mock data structure matching backoffice
+import Card from "@/components/ui/Card";
+import Icon, { IconName } from "@/components/ui/Icon";
+import StatusBadge from "@/components/ui/StatusBadge";
+import ThemedText from "@/components/ui/ThemedText";
+import { FontFamily, Typography } from "@/constants/Typography";
+import { useThemeColors } from "@/hooks/useThemeColors";
+
+/* ---------- Types & mock data ---------- */
+
 type TriageItem = {
     linenTypeCode: string;
     linenTypeName: string;
@@ -30,15 +31,21 @@ type TriageItem = {
 };
 
 type DeliveryStatus =
-    | 'Prêt pour livraison'
-    | 'En route'
-    | 'Sur place'
-    | 'Livraison en cours'
-    | 'Livrée';
+    | "Prêt pour livraison"
+    | "En route"
+    | "Sur place"
+    | "Livraison en cours"
+    | "Livrée";
 
-type Photo = {
-    uri: string;
-    timestamp: string;
+type Photo = { uri: string; timestamp: string };
+
+type DeliveryProgress = {
+    startedAt?: string;
+    arrivedAt?: string;
+    photos: Photo[];
+    signatureUri?: string;
+    completedAt?: string;
+    recipientName?: string;
 };
 
 type DeliveryOrder = {
@@ -57,65 +64,57 @@ type DeliveryOrder = {
         totalPieces: number;
         totalAmount: number;
     };
-    deliveryProgress?: {
-        startedAt?: string;
-        arrivedAt?: string;
-        photos: Photo[];
-        signatureUri?: string;
-        completedAt?: string;
-        recipientName?: string;
-    };
+    deliveryProgress?: DeliveryProgress;
 };
 
-// Mock deliveries for the current driver
 const mockDeliveries: DeliveryOrder[] = [
     {
-        id: 'ord-001',
-        orderNumber: 'CMD-2024-089',
-        clientName: 'Hôtel Plaza',
-        clientAddress: 'Route de la Corniche Ouest, Dakar',
-        status: 'Prêt pour livraison',
-        actualWeight: 840000, // en grammes
-        deliveryDate: '2025-12-30',
-        deliveryTime: '14:00',
+        id: "ord-001",
+        orderNumber: "CMD-2024-089",
+        clientName: "Hôtel Plaza",
+        clientAddress: "Route de la Corniche Ouest, Dakar",
+        status: "Prêt pour livraison",
+        actualWeight: 840000,
+        deliveryDate: "2025-12-30",
+        deliveryTime: "14:00",
         triage: {
-            completedAt: '2024-12-20T10:30:00Z',
+            completedAt: "2024-12-20T10:30:00Z",
             items: [
                 {
-                    linenTypeCode: 'LP-001',
-                    linenTypeName: 'Drap 2 personnes',
+                    linenTypeCode: "LP-001",
+                    linenTypeName: "Drap 2 personnes",
                     weight: 400000,
                     pieces: 500,
                     unitPrice: 300,
                     totalPrice: 120000,
                 },
                 {
-                    linenTypeCode: 'LP-002',
-                    linenTypeName: 'Drap 1 personne',
+                    linenTypeCode: "LP-002",
+                    linenTypeName: "Drap 1 personne",
                     weight: 100000,
                     pieces: 167,
                     unitPrice: 400,
                     totalPrice: 40000,
                 },
                 {
-                    linenTypeCode: 'LP-005',
-                    linenTypeName: 'Grande serviette',
+                    linenTypeCode: "LP-005",
+                    linenTypeName: "Grande serviette",
                     weight: 240000,
                     pieces: 480,
                     unitPrice: 250,
                     totalPrice: 60000,
                 },
                 {
-                    linenTypeCode: 'LF-009',
-                    linenTypeName: 'Nappe légère',
+                    linenTypeCode: "LF-009",
+                    linenTypeName: "Nappe légère",
                     weight: 0,
                     pieces: 60,
                     unitPrice: 500,
                     totalPrice: 30000,
                 },
                 {
-                    linenTypeCode: 'LF-002',
-                    linenTypeName: 'Chemise',
+                    linenTypeCode: "LF-002",
+                    linenTypeName: "Chemise",
                     weight: 0,
                     pieces: 40,
                     unitPrice: 400,
@@ -128,36 +127,36 @@ const mockDeliveries: DeliveryOrder[] = [
         },
     },
     {
-        id: 'ord-002',
-        orderNumber: 'CMD-2024-088',
-        clientName: 'Hôtel Savana',
-        clientAddress: 'Avenue Cheikh Anta Diop, Dakar',
-        status: 'Prêt pour livraison',
+        id: "ord-002",
+        orderNumber: "CMD-2024-088",
+        clientName: "Hôtel Savana",
+        clientAddress: "Avenue Cheikh Anta Diop, Dakar",
+        status: "Prêt pour livraison",
         actualWeight: 820000,
-        deliveryDate: '2025-12-30',
-        deliveryTime: '16:00',
+        deliveryDate: "2025-12-30",
+        deliveryTime: "16:00",
         triage: {
-            completedAt: '2024-12-15T10:30:00Z',
+            completedAt: "2024-12-15T10:30:00Z",
             items: [
                 {
-                    linenTypeCode: 'LP-001',
-                    linenTypeName: 'Drap 2 personnes',
+                    linenTypeCode: "LP-001",
+                    linenTypeName: "Drap 2 personnes",
                     weight: 480000,
                     pieces: 600,
                     unitPrice: 300,
                     totalPrice: 144000,
                 },
                 {
-                    linenTypeCode: 'LP-005',
-                    linenTypeName: 'Grande serviette',
+                    linenTypeCode: "LP-005",
+                    linenTypeName: "Grande serviette",
                     weight: 280000,
                     pieces: 560,
                     unitPrice: 250,
                     totalPrice: 70000,
                 },
                 {
-                    linenTypeCode: 'LF-009',
-                    linenTypeName: 'Nappe légère',
+                    linenTypeCode: "LF-009",
+                    linenTypeName: "Nappe légère",
                     weight: 0,
                     pieces: 40,
                     unitPrice: 500,
@@ -171,410 +170,274 @@ const mockDeliveries: DeliveryOrder[] = [
     },
 ];
 
-const STORAGE_KEY = '@driver_deliveries';
+const STORAGE_KEY = "@driver_deliveries";
+
+/* ---------- Helpers ---------- */
+
+const formatWeight = (g: number) => `${(g / 1000).toFixed(1)} kg`;
+const formatCurrency = (n: number) => `${n.toLocaleString("fr-FR")} F CFA`;
+
+const STATUS_TO_UI: Record<DeliveryStatus, string> = {
+    "Prêt pour livraison": "Prête",
+    "En route": "En attente",
+    "Sur place": "Traitement",
+    "Livraison en cours": "Traitement",
+    "Livrée": "Livrée",
+};
+
+/* ---------- Screen ---------- */
 
 export default function DeliveryScreen() {
-    const router = useRouter();
     const colors = useThemeColors();
     const [deliveries, setDeliveries] = useState<DeliveryOrder[]>([]);
-    const [selectedDelivery, setSelectedDelivery] = useState<DeliveryOrder | null>(null);
-    const [deliveryStep, setDeliveryStep] = useState<'list' | 'details' | 'complete'>('list');
+    const [selected, setSelected] = useState<DeliveryOrder | null>(null);
+    const [step, setStep] = useState<"list" | "details" | "complete">("list");
     const [showSignatureModal, setShowSignatureModal] = useState(false);
-    const [recipientName, setRecipientName] = useState('');
+    const [recipientName, setRecipientName] = useState("");
 
-    // Load deliveries from storage on mount
     useEffect(() => {
-        loadDeliveries();
+        void loadDeliveries();
     }, []);
 
-    const loadDeliveries = async () => {
+    async function loadDeliveries() {
         try {
             const stored = await AsyncStorage.getItem(STORAGE_KEY);
             if (stored) {
                 setDeliveries(JSON.parse(stored));
             } else {
-                // Initialize with mock data on first load
                 setDeliveries(mockDeliveries);
                 await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(mockDeliveries));
             }
-        } catch (error) {
-            console.error('Error loading deliveries:', error);
+        } catch (err) {
+            console.error("Error loading deliveries:", err);
             setDeliveries(mockDeliveries);
         }
-    };
+    }
 
-    const saveDeliveries = async (updatedDeliveries: DeliveryOrder[]) => {
+    async function saveDeliveries(next: DeliveryOrder[]) {
         try {
-            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedDeliveries));
-            setDeliveries(updatedDeliveries);
-        } catch (error) {
-            console.error('Error saving deliveries:', error);
+            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+            setDeliveries(next);
+        } catch (err) {
+            console.error("Error saving deliveries:", err);
         }
-    };
+    }
 
-    const updateDeliveryStatus = (deliveryId: string, newStatus: DeliveryStatus, progress?: any) => {
-        const updatedDeliveries = deliveries.map((delivery) => {
-            if (delivery.id === deliveryId) {
-                return {
-                    ...delivery,
-                    status: newStatus,
-                    deliveryProgress: progress || delivery.deliveryProgress,
-                };
-            }
-            return delivery;
-        });
-        saveDeliveries(updatedDeliveries);
-
-        // Update selected delivery if it's the one being modified
-        if (selectedDelivery?.id === deliveryId) {
-            const updated = updatedDeliveries.find((d) => d.id === deliveryId);
-            if (updated) setSelectedDelivery(updated);
+    function updateDeliveryStatus(
+        id: string,
+        newStatus: DeliveryStatus,
+        progress?: DeliveryProgress,
+    ) {
+        const next = deliveries.map((d) =>
+            d.id === id
+                ? { ...d, status: newStatus, deliveryProgress: progress ?? d.deliveryProgress }
+                : d,
+        );
+        void saveDeliveries(next);
+        if (selected?.id === id) {
+            const updated = next.find((d) => d.id === id);
+            if (updated) setSelected(updated);
         }
-    };
+    }
 
-    const formatWeight = (weightInGrams: number) => {
-        return `${(weightInGrams / 1000).toFixed(1)} kg`;
-    };
-
-    const formatCurrency = (amount: number) => {
-        return `${amount.toLocaleString()} FCFA`;
-    };
-
-    const handleSelectDelivery = (delivery: DeliveryOrder) => {
-        setSelectedDelivery(delivery);
-        setDeliveryStep('details');
+    const handleSelect = (d: DeliveryOrder) => {
+        setSelected(d);
+        setStep("details");
     };
 
     const handleStartRoute = () => {
-        if (!selectedDelivery) return;
-
-        Alert.alert(
-            'Démarrer la tournée',
-            'Êtes-vous prêt à commencer la livraison ?',
-            [
-                {
-                    text: 'Annuler',
-                    style: 'cancel',
+        if (!selected) return;
+        Alert.alert("Démarrer la tournée", "Êtes-vous prêt à commencer la livraison ?", [
+            { text: "Annuler", style: "cancel" },
+            {
+                text: "Démarrer",
+                onPress: () => {
+                    updateDeliveryStatus(selected.id, "En route", {
+                        startedAt: new Date().toISOString(),
+                        photos: [],
+                    });
+                    Alert.alert("En route", "Livraison démarrée. Bonne route !");
                 },
-                {
-                    text: 'Démarrer',
-                    onPress: () => {
-                        const progress = {
-                            startedAt: new Date().toISOString(),
-                            photos: [],
-                        };
-                        updateDeliveryStatus(selectedDelivery.id, 'En route', progress);
-                        Alert.alert('En route', 'Livraison démarrée. Bonne route !');
-                    },
-                },
-            ]
-        );
+            },
+        ]);
     };
 
     const handleArrived = () => {
-        if (!selectedDelivery) return;
-
-        const progress = {
-            ...selectedDelivery.deliveryProgress,
+        if (!selected) return;
+        updateDeliveryStatus(selected.id, "Sur place", {
+            ...selected.deliveryProgress,
             arrivedAt: new Date().toISOString(),
-            photos: selectedDelivery.deliveryProgress?.photos || [],
-        };
-        updateDeliveryStatus(selectedDelivery.id, 'Sur place', progress);
-        Alert.alert('Sur place', 'Vous êtes arrivé chez le client');
+            photos: selected.deliveryProgress?.photos ?? [],
+        });
+        Alert.alert("Sur place", "Vous êtes arrivé chez le client");
     };
 
     const handleStartDelivery = () => {
-        if (!selectedDelivery) return;
-
-        const progress = {
-            ...selectedDelivery.deliveryProgress,
-            photos: selectedDelivery.deliveryProgress?.photos || [],
-        };
-        updateDeliveryStatus(selectedDelivery.id, 'Livraison en cours', progress);
-        setDeliveryStep('complete');
+        if (!selected) return;
+        updateDeliveryStatus(selected.id, "Livraison en cours", {
+            ...selected.deliveryProgress,
+            photos: selected.deliveryProgress?.photos ?? [],
+        });
+        setStep("complete");
     };
 
     const handleTakePhoto = () => {
-        if (!selectedDelivery) return;
-
-        // Simulate taking photo with timestamp
+        if (!selected) return;
         const newPhoto: Photo = {
             uri: `photo_${Date.now()}.jpg`,
             timestamp: new Date().toISOString(),
         };
-
-        const photos = [...(selectedDelivery.deliveryProgress?.photos || []), newPhoto];
-        const progress = {
-            ...selectedDelivery.deliveryProgress,
+        const photos = [...(selected.deliveryProgress?.photos ?? []), newPhoto];
+        updateDeliveryStatus(selected.id, selected.status, {
+            ...selected.deliveryProgress,
             photos,
-        };
-
-        updateDeliveryStatus(selectedDelivery.id, selectedDelivery.status, progress);
-        Alert.alert(
-            'Photo ajoutée',
-            `Photo ${photos.length} enregistrée avec succès`,
-            [{ text: 'OK' }]
-        );
-    };
-
-    const handleSignature = () => {
-        setShowSignatureModal(true);
+        });
+        Alert.alert("Photo ajoutée", `Photo ${photos.length} enregistrée`);
     };
 
     const handleSaveSignature = () => {
-        if (!selectedDelivery || !recipientName.trim()) {
-            Alert.alert('Attention', 'Veuillez entrer le nom du destinataire');
+        if (!selected || !recipientName.trim()) {
+            Alert.alert("Attention", "Veuillez entrer le nom du destinataire");
             return;
         }
-
-        const progress = {
-            ...selectedDelivery.deliveryProgress,
+        updateDeliveryStatus(selected.id, selected.status, {
+            ...selected.deliveryProgress,
             signatureUri: `signature_${Date.now()}.png`,
             recipientName: recipientName.trim(),
-            photos: selectedDelivery.deliveryProgress?.photos || [],
-        };
-
-        updateDeliveryStatus(selectedDelivery.id, selectedDelivery.status, progress);
+            photos: selected.deliveryProgress?.photos ?? [],
+        });
         setShowSignatureModal(false);
-        setRecipientName('');
-        Alert.alert('Signature enregistrée', `Signé par: ${recipientName.trim()}`);
+        setRecipientName("");
+        Alert.alert("Signature enregistrée", `Signé par : ${recipientName.trim()}`);
     };
 
     const handleCompleteDelivery = () => {
-        if (!selectedDelivery) return;
-
-        const photos = selectedDelivery.deliveryProgress?.photos || [];
-        const signature = selectedDelivery.deliveryProgress?.signatureUri;
-
+        if (!selected) return;
+        const photos = selected.deliveryProgress?.photos ?? [];
+        const signature = selected.deliveryProgress?.signatureUri;
         if (photos.length === 0 || !signature) {
             Alert.alert(
-                'Attention',
-                'Veuillez prendre au moins une photo et obtenir la signature avant de terminer'
+                "Attention",
+                "Veuillez ajouter au moins une photo et obtenir la signature",
             );
             return;
         }
-
         Alert.alert(
-            'Confirmer la livraison',
-            `Confirmer la livraison ${selectedDelivery.orderNumber} ?\n\nRécipient: ${selectedDelivery.deliveryProgress?.recipientName}\nPhotos: ${photos.length}`,
+            "Confirmer la livraison",
+            `Confirmer la livraison ${selected.orderNumber} ?\n\nRécipient : ${selected.deliveryProgress?.recipientName}\nPhotos : ${photos.length}`,
             [
+                { text: "Annuler", style: "cancel" },
                 {
-                    text: 'Annuler',
-                    style: 'cancel',
-                },
-                {
-                    text: 'Confirmer',
+                    text: "Confirmer",
                     onPress: () => {
-                        const progress = {
-                            ...selectedDelivery.deliveryProgress,
+                        updateDeliveryStatus(selected.id, "Livrée", {
+                            ...selected.deliveryProgress,
                             completedAt: new Date().toISOString(),
                             photos,
                             signatureUri: signature,
-                        };
-
-                        updateDeliveryStatus(selectedDelivery.id, 'Livrée', progress);
-
+                        });
                         Alert.alert(
-                            'Livraison terminée',
-                            `La livraison a été enregistrée avec succès !`,
+                            "Livraison terminée",
+                            "La livraison a été enregistrée avec succès",
                             [
                                 {
-                                    text: 'OK',
+                                    text: "OK",
                                     onPress: () => {
-                                        setSelectedDelivery(null);
-                                        setDeliveryStep('list');
+                                        setSelected(null);
+                                        setStep("list");
                                     },
                                 },
-                            ]
+                            ],
                         );
                     },
                 },
-            ]
+            ],
         );
     };
 
-    const getStatusColor = (status: DeliveryStatus) => {
-        switch (status) {
-            case 'Prêt pour livraison':
-                return '#3B82F6'; // Blue
-            case 'En route':
-                return '#F59E0B'; // Orange
-            case 'Sur place':
-                return '#8B5CF6'; // Purple
-            case 'Livraison en cours':
-                return '#EC4899'; // Pink
-            case 'Livrée':
-                return '#10B981'; // Green
-            default:
-                return '#6B7280'; // Gray
-        }
-    };
+    const active = deliveries.filter((d) => d.status !== "Livrée");
+    const done = deliveries.filter((d) => d.status === "Livrée");
 
-    const activeDeliveries = deliveries.filter((d) => d.status !== 'Livrée');
-    const completedDeliveries = deliveries.filter((d) => d.status === 'Livrée');
-
-    // LIST VIEW - Show all deliveries for the driver
-    if (deliveryStep === 'list') {
+    /* ---------- LIST VIEW ---------- */
+    if (step === "list") {
         return (
-            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-                <View style={styles.header}>
-                    <ThemedText variate="headline" color="textPrimary">
-                        Mes Livraisons
-                    </ThemedText>
-                    <View style={styles.badge}>
-                        <Text style={[styles.badgeText, { color: colors.driverPrimary }]}>
-                            {activeDeliveries.length}
+            <SafeAreaView
+                edges={["top"]}
+                style={[styles.container, { backgroundColor: colors.paper2 }]}
+            >
+                <View
+                    style={[
+                        styles.header,
+                        { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
+                    ]}
+                >
+                    <ThemedText variate="title">Livraisons</ThemedText>
+                    <View
+                        style={[
+                            styles.countBadge,
+                            { backgroundColor: colors.baobab100, borderColor: colors.baobab600 },
+                        ]}
+                    >
+                        <Text
+                            style={[styles.countBadgeText, { color: colors.baobab700 }]}
+                        >
+                            {active.length}
                         </Text>
                     </View>
                 </View>
 
                 <ScrollView
-                    style={{ flex: 1 }}
                     contentContainerStyle={styles.content}
                     showsVerticalScrollIndicator={false}
                 >
-                    {activeDeliveries.length > 0 && (
-                        <ThemedText
-                            variate="subtitle2"
-                            color="textSecondary"
-                            style={{ marginBottom: Spacing.md }}
-                        >
-                            🚚 Livraisons en cours ({activeDeliveries.length})
+                    {active.length > 0 && (
+                        <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
+                            En cours · {active.length}
                         </ThemedText>
                     )}
 
-                    {activeDeliveries.map((delivery, index) => (
-                        <TouchableOpacity
-                            key={delivery.id}
-                            onPress={() => handleSelectDelivery(delivery)}
-                            activeOpacity={0.7}
-                        >
-                            <Card style={styles.deliveryCard}>
-                                <View style={styles.deliveryHeader}>
-                                    <View style={styles.deliveryNumber}>
-                                        <Text style={[styles.deliveryNumberText, { color: colors.driverPrimary }]}>
-                                            {index + 1}
-                                        </Text>
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <ThemedText variate="subtitle2" color="textPrimary">
-                                            {delivery.orderNumber}
-                                        </ThemedText>
-                                        <ThemedText variate="caption" color="textSecondary">
-                                            {delivery.clientName}
-                                        </ThemedText>
-                                    </View>
-                                    <View style={styles.deliveryTime}>
-                                        <Text style={styles.timeIcon}>🕐</Text>
-                                        <ThemedText variate="subtitle3" color="textPrimary">
-                                            {delivery.deliveryTime}
-                                        </ThemedText>
-                                    </View>
-                                </View>
+                    <View style={{ gap: 10 }}>
+                        {active.map((d, i) => (
+                            <DeliveryListItem
+                                key={d.id}
+                                delivery={d}
+                                index={i + 1}
+                                onPress={() => handleSelect(d)}
+                            />
+                        ))}
+                    </View>
 
-                                <View style={styles.deliveryStats}>
-                                    <View style={styles.stat}>
-                                        <Text style={styles.statIcon}>⚖️</Text>
-                                        <ThemedText variate="caption" color="textSecondary">
-                                            {formatWeight(delivery.actualWeight)}
-                                        </ThemedText>
-                                    </View>
-                                    <View style={styles.stat}>
-                                        <Text style={styles.statIcon}>📦</Text>
-                                        <ThemedText variate="caption" color="textSecondary">
-                                            {delivery.triage.totalPieces} pièces
-                                        </ThemedText>
-                                    </View>
-                                    <View style={styles.stat}>
-                                        <Text style={styles.statIcon}>💰</Text>
-                                        <ThemedText variate="caption" color="textSecondary">
-                                            {formatCurrency(delivery.triage.totalAmount)}
-                                        </ThemedText>
-                                    </View>
-                                </View>
-
-                                <View style={styles.deliveryAddress}>
-                                    <Text style={styles.addressIcon}>📍</Text>
-                                    <ThemedText variate="caption" color="textSecondary" style={{ flex: 1 }}>
-                                        {delivery.clientAddress}
-                                    </ThemedText>
-                                </View>
-
-                                <View
-                                    style={[
-                                        styles.statusBadge,
-                                        { backgroundColor: getStatusColor(delivery.status) + '15' },
-                                    ]}
-                                >
-                                    <ThemedText
-                                        variate="caption"
-                                        style={{ color: getStatusColor(delivery.status), fontWeight: '600' }}
-                                    >
-                                        {delivery.status}
-                                    </ThemedText>
-                                </View>
-                            </Card>
-                        </TouchableOpacity>
-                    ))}
-
-                    {activeDeliveries.length === 0 && completedDeliveries.length === 0 && (
+                    {active.length === 0 && done.length === 0 && (
                         <View style={styles.emptyState}>
-                            <Text style={styles.emptyIcon}>📦</Text>
-                            <ThemedText variate="subtitle2" color="textSecondary">
+                            <Icon name="package" size={40} color={colors.ink400} />
+                            <Text
+                                style={[styles.emptyText, { color: colors.ink500 }]}
+                            >
                                 Aucune livraison pour aujourd'hui
-                            </ThemedText>
+                            </Text>
                         </View>
                     )}
 
-                    {/* Completed Deliveries Section */}
-                    {completedDeliveries.length > 0 && (
+                    {done.length > 0 && (
                         <>
                             <ThemedText
-                                variate="subtitle2"
-                                color="textSecondary"
-                                style={{ marginTop: Spacing.xl, marginBottom: Spacing.md }}
+                                variate="caps"
+                                color="ink500"
+                                style={[styles.sectionLabel, { marginTop: 20 }]}
                             >
-                                ✅ Livraisons terminées ({completedDeliveries.length})
+                                Terminées · {done.length}
                             </ThemedText>
-
-                            {completedDeliveries.map((delivery, index) => (
-                                <TouchableOpacity
-                                    key={delivery.id}
-                                    onPress={() => handleSelectDelivery(delivery)}
-                                    activeOpacity={0.7}
-                                >
-                                    <Card style={[styles.deliveryCard, { opacity: 0.7 }]}>
-                                        <View style={styles.deliveryHeader}>
-                                            <View style={[styles.deliveryNumber, { backgroundColor: '#10B98120' }]}>
-                                                <Text style={[styles.deliveryNumberText, { color: '#10B981' }]}>
-                                                    ✓
-                                                </Text>
-                                            </View>
-                                            <View style={{ flex: 1 }}>
-                                                <ThemedText variate="subtitle2" color="textPrimary">
-                                                    {delivery.orderNumber}
-                                                </ThemedText>
-                                                <ThemedText variate="caption" color="textSecondary">
-                                                    {delivery.clientName}
-                                                </ThemedText>
-                                            </View>
-                                        </View>
-                                        <View
-                                            style={[
-                                                styles.statusBadge,
-                                                { backgroundColor: '#10B98115' },
-                                            ]}
-                                        >
-                                            <ThemedText
-                                                variate="caption"
-                                                style={{ color: '#10B981', fontWeight: '600' }}
-                                            >
-                                                Livrée • {delivery.deliveryProgress?.recipientName}
-                                            </ThemedText>
-                                        </View>
-                                    </Card>
-                                </TouchableOpacity>
-                            ))}
+                            <View style={{ gap: 10 }}>
+                                {done.map((d, i) => (
+                                    <DeliveryListItem
+                                        key={d.id}
+                                        delivery={d}
+                                        index={i + 1}
+                                        onPress={() => handleSelect(d)}
+                                        compact
+                                    />
+                                ))}
+                            </View>
                         </>
                     )}
                 </ScrollView>
@@ -582,319 +445,289 @@ export default function DeliveryScreen() {
         );
     }
 
-    // DETAILS VIEW - Show delivery slip (bordereau) with all triage info
-    if (deliveryStep === 'details' && selectedDelivery) {
+    /* ---------- DETAILS VIEW ---------- */
+    if (step === "details" && selected) {
         return (
-            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-                <View style={styles.header}>
-                    <TouchableOpacity
-                        onPress={() => setDeliveryStep('list')}
-                        style={styles.backButton}
-                    >
-                        <Text style={styles.backIcon}>←</Text>
-                    </TouchableOpacity>
-                    <ThemedText variate="headline" color="textPrimary">
-                        Bordereau de Livraison
-                    </ThemedText>
-                    <View style={{ width: 40 }} />
+            <SafeAreaView
+                edges={["top"]}
+                style={[styles.container, { backgroundColor: colors.paper2 }]}
+            >
+                <View
+                    style={[
+                        styles.header,
+                        { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
+                    ]}
+                >
+                    <Pressable onPress={() => setStep("list")} hitSlop={8}>
+                        <Icon name="chevLeft" size={20} color={colors.ink800} />
+                    </Pressable>
+                    <ThemedText variate="title">Bordereau</ThemedText>
+                    <View style={{ width: 20 }} />
                 </View>
 
                 <ScrollView
-                    style={{ flex: 1 }}
                     contentContainerStyle={styles.content}
                     showsVerticalScrollIndicator={false}
                 >
-                    {/* Order Header */}
-                    <Card style={[styles.slipHeader, { backgroundColor: colors.driverPrimary + '10' }]}>
-                        <View style={styles.slipRow}>
-                            <ThemedText variate="subtitle3" color="textSecondary">
+                    {/* Order header */}
+                    <Card
+                        padding={16}
+                        style={[
+                            styles.orderHeaderCard,
+                            {
+                                backgroundColor: colors.brand900,
+                                borderColor: colors.brand900,
+                            },
+                        ]}
+                    >
+                        <View style={styles.orderHeaderTop}>
+                            <Text style={[styles.orderCaps, { color: colors.brand100 }]}>
                                 Commande
-                            </ThemedText>
-                            <ThemedText variate="subtitle1" color="textPrimary">
-                                {selectedDelivery.orderNumber}
-                            </ThemedText>
+                            </Text>
+                            <StatusBadge status={STATUS_TO_UI[selected.status]} />
                         </View>
-                        <View style={styles.slipRow}>
-                            <ThemedText variate="subtitle3" color="textSecondary">
-                                Client
-                            </ThemedText>
-                            <ThemedText variate="subtitle2" color="textPrimary">
-                                {selectedDelivery.clientName}
-                            </ThemedText>
+                        <Text
+                            style={[styles.orderNumber, { color: colors.paper }]}
+                        >
+                            {selected.orderNumber}
+                        </Text>
+                        <Text style={[styles.orderClient, { color: colors.brand100 }]}>
+                            {selected.clientName}
+                        </Text>
+
+                        <View style={styles.addressRow}>
+                            <Icon name="map" size={12} color={colors.brand100} />
+                            <Text
+                                style={[styles.addressText, { color: colors.brand100 }]}
+                            >
+                                {selected.clientAddress}
+                            </Text>
                         </View>
-                        <View style={styles.slipRow}>
-                            <Text style={styles.addressIcon}>📍</Text>
-                            <ThemedText variate="caption" color="textSecondary" style={{ flex: 1 }}>
-                                {selectedDelivery.clientAddress}
-                            </ThemedText>
+
+                        <View
+                            style={[
+                                styles.orderTotals,
+                                { borderTopColor: colors.brand700 },
+                            ]}
+                        >
+                            <Total label="Poids total" value={formatWeight(selected.triage.totalWeight)} colors={colors} />
+                            <Total label="Pièces" value={`${selected.triage.totalPieces}`} colors={colors} />
+                            <Total
+                                label="Montant"
+                                value={formatCurrency(selected.triage.totalAmount)}
+                                colors={colors}
+                                accent
+                            />
                         </View>
                     </Card>
 
-                    {/* Weight Summary */}
-                    <Card style={styles.summaryCard}>
-                        <ThemedText variate="subtitle2" color="textPrimary" style={styles.sectionTitle}>
-                            📊 Résumé Global
-                        </ThemedText>
-                        <View style={styles.summaryGrid}>
-                            <View style={styles.summaryItem}>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    Poids total
-                                </ThemedText>
-                                <ThemedText variate="subtitle1" style={{ color: colors.driverPrimary }}>
-                                    {formatWeight(selectedDelivery.triage.totalWeight)}
-                                </ThemedText>
-                            </View>
-                            <View style={styles.summaryItem}>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    Pièces totales
-                                </ThemedText>
-                                <ThemedText variate="subtitle1" style={{ color: colors.driverPrimary }}>
-                                    {selectedDelivery.triage.totalPieces}
-                                </ThemedText>
-                            </View>
-                            <View style={[styles.summaryItem, styles.summaryItemFull]}>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    Montant total
-                                </ThemedText>
-                                <ThemedText variate="headline" style={{ color: '#10B981' }}>
-                                    {formatCurrency(selectedDelivery.triage.totalAmount)}
-                                </ThemedText>
-                            </View>
+                    {/* Triage */}
+                    <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
+                        Détail du linge
+                    </ThemedText>
+
+                    <Card padding={0} style={{ marginBottom: 14, overflow: "hidden" }}>
+                        <View
+                            style={[
+                                styles.tableHead,
+                                { backgroundColor: colors.paper2, borderBottomColor: colors.ink200 },
+                            ]}
+                        >
+                            <Text
+                                style={[
+                                    styles.tableHeadCell,
+                                    styles.cellType,
+                                    { color: colors.ink600 },
+                                ]}
+                            >
+                                Article
+                            </Text>
+                            <Text
+                                style={[
+                                    styles.tableHeadCell,
+                                    styles.cellQty,
+                                    { color: colors.ink600 },
+                                ]}
+                            >
+                                Pcs
+                            </Text>
+                            <Text
+                                style={[
+                                    styles.tableHeadCell,
+                                    styles.cellWeight,
+                                    { color: colors.ink600 },
+                                ]}
+                            >
+                                Poids
+                            </Text>
+                            <Text
+                                style={[
+                                    styles.tableHeadCell,
+                                    styles.cellPrice,
+                                    { color: colors.ink600 },
+                                ]}
+                            >
+                                Montant
+                            </Text>
                         </View>
-                    </Card>
 
-                    {/* Triage Details */}
-                    <Card style={styles.triageCard}>
-                        <ThemedText variate="subtitle2" color="textPrimary" style={styles.sectionTitle}>
-                            📋 Détail du Linge
-                        </ThemedText>
-                        <View style={styles.triageTable}>
-                            {/* Table Header */}
-                            <View style={styles.tableHeader}>
-                                <ThemedText
-                                    variate="caption"
-                                    color="textSecondary"
-                                    style={[styles.tableCell, styles.tableCellType]}
-                                >
-                                    Type de linge
-                                </ThemedText>
-                                <ThemedText
-                                    variate="caption"
-                                    color="textSecondary"
-                                    style={[styles.tableCell, styles.tableCellQty]}
-                                >
-                                    Pièces
-                                </ThemedText>
-                                <ThemedText
-                                    variate="caption"
-                                    color="textSecondary"
-                                    style={[styles.tableCell, styles.tableCellWeight]}
-                                >
-                                    Poids
-                                </ThemedText>
-                                <ThemedText
-                                    variate="caption"
-                                    color="textSecondary"
-                                    style={[styles.tableCell, styles.tableCellPrice]}
-                                >
-                                    Montant
-                                </ThemedText>
-                            </View>
-
-                            {/* Table Rows */}
-                            {selectedDelivery.triage.items.map((item, index) => (
-                                <View
-                                    key={index}
-                                    style={[
-                                        styles.tableRow,
-                                        index % 2 === 0 && { backgroundColor: '#F9FAFB' },
-                                    ]}
-                                >
-                                    <View style={[styles.tableCell, styles.tableCellType]}>
-                                        <ThemedText variate="caption" color="textPrimary">
-                                            {item.linenTypeCode}
-                                        </ThemedText>
-                                        <ThemedText variate="caption" color="textSecondary">
-                                            {item.linenTypeName}
-                                        </ThemedText>
-                                    </View>
-                                    <ThemedText
-                                        variate="subtitle3"
-                                        color="textPrimary"
-                                        style={[styles.tableCell, styles.tableCellQty]}
+                        {selected.triage.items.map((item, i) => (
+                            <View
+                                key={item.linenTypeCode}
+                                style={[
+                                    styles.tableRow,
+                                    {
+                                        borderBottomColor: colors.ink200,
+                                        backgroundColor:
+                                            i % 2 === 0 ? colors.paper : colors.paper2,
+                                    },
+                                ]}
+                            >
+                                <View style={[styles.tableCell, styles.cellType]}>
+                                    <Text
+                                        style={[styles.itemCode, { color: colors.ink900 }]}
                                     >
-                                        {item.pieces}
-                                    </ThemedText>
-                                    <ThemedText
-                                        variate="caption"
-                                        color="textSecondary"
-                                        style={[styles.tableCell, styles.tableCellWeight]}
+                                        {item.linenTypeCode}
+                                    </Text>
+                                    <Text
+                                        style={[styles.itemName, { color: colors.ink500 }]}
                                     >
-                                        {item.weight > 0 ? formatWeight(item.weight) : '-'}
-                                    </ThemedText>
-                                    <ThemedText
-                                        variate="subtitle3"
-                                        style={[
-                                            styles.tableCell,
-                                            styles.tableCellPrice,
-                                            { color: '#10B981' },
-                                        ]}
-                                    >
-                                        {formatCurrency(item.totalPrice)}
-                                    </ThemedText>
+                                        {item.linenTypeName}
+                                    </Text>
                                 </View>
-                            ))}
-
-                            {/* Table Footer */}
-                            <View style={[styles.tableRow, styles.tableFooter]}>
-                                <ThemedText
-                                    variate="subtitle2"
-                                    color="textPrimary"
-                                    style={[styles.tableCell, styles.tableCellType]}
-                                >
-                                    TOTAL
-                                </ThemedText>
-                                <ThemedText
-                                    variate="subtitle1"
+                                <Text
                                     style={[
                                         styles.tableCell,
-                                        styles.tableCellQty,
-                                        { color: colors.driverPrimary },
+                                        styles.cellQty,
+                                        styles.mono,
+                                        { color: colors.ink900 },
                                     ]}
                                 >
-                                    {selectedDelivery.triage.totalPieces}
-                                </ThemedText>
-                                <ThemedText
-                                    variate="subtitle2"
+                                    {item.pieces}
+                                </Text>
+                                <Text
                                     style={[
                                         styles.tableCell,
-                                        styles.tableCellWeight,
-                                        { color: colors.driverPrimary },
+                                        styles.cellWeight,
+                                        styles.mono,
+                                        { color: colors.ink700 },
                                     ]}
                                 >
-                                    {formatWeight(selectedDelivery.triage.totalWeight)}
-                                </ThemedText>
-                                <ThemedText
-                                    variate="subtitle1"
-                                    style={[styles.tableCell, styles.tableCellPrice, { color: '#10B981' }]}
+                                    {item.weight > 0 ? formatWeight(item.weight) : "—"}
+                                </Text>
+                                <Text
+                                    style={[
+                                        styles.tableCell,
+                                        styles.cellPrice,
+                                        styles.mono,
+                                        { color: colors.ink900 },
+                                    ]}
                                 >
-                                    {formatCurrency(selectedDelivery.triage.totalAmount)}
-                                </ThemedText>
+                                    {formatCurrency(item.totalPrice)}
+                                </Text>
                             </View>
+                        ))}
+
+                        <View
+                            style={[
+                                styles.tableFooter,
+                                { backgroundColor: colors.paper2 },
+                            ]}
+                        >
+                            <Text
+                                style={[
+                                    styles.tableCell,
+                                    styles.cellType,
+                                    styles.footerLabel,
+                                    { color: colors.ink900 },
+                                ]}
+                            >
+                                TOTAL
+                            </Text>
+                            <Text
+                                style={[
+                                    styles.tableCell,
+                                    styles.cellQty,
+                                    styles.footerValue,
+                                    { color: colors.ink900 },
+                                ]}
+                            >
+                                {selected.triage.totalPieces}
+                            </Text>
+                            <Text
+                                style={[
+                                    styles.tableCell,
+                                    styles.cellWeight,
+                                    styles.footerValue,
+                                    { color: colors.ink900 },
+                                ]}
+                            >
+                                {formatWeight(selected.triage.totalWeight)}
+                            </Text>
+                            <Text
+                                style={[
+                                    styles.tableCell,
+                                    styles.cellPrice,
+                                    styles.footerValue,
+                                    { color: colors.brand800 },
+                                ]}
+                            >
+                                {formatCurrency(selected.triage.totalAmount)}
+                            </Text>
                         </View>
                     </Card>
 
-                    {/* Status Progress Indicator */}
-                    <Card style={styles.progressCard}>
-                        <ThemedText variate="subtitle2" color="textPrimary" style={{ marginBottom: Spacing.md }}>
-                            📍 État de la livraison
-                        </ThemedText>
-                        <View style={styles.progressSteps}>
-                            <View style={styles.progressStep}>
-                                <View
-                                    style={[
-                                        styles.progressDot,
-                                        {
-                                            backgroundColor:
-                                                selectedDelivery.status !== 'Prêt pour livraison'
-                                                    ? '#10B981'
-                                                    : '#E5E7EB',
-                                        },
-                                    ]}
-                                >
-                                    {selectedDelivery.status !== 'Prêt pour livraison' && (
-                                        <Text style={styles.progressCheck}>✓</Text>
-                                    )}
-                                </View>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    Démarré
-                                </ThemedText>
-                            </View>
-                            <View style={styles.progressLine} />
-                            <View style={styles.progressStep}>
-                                <View
-                                    style={[
-                                        styles.progressDot,
-                                        {
-                                            backgroundColor:
-                                                selectedDelivery.status === 'Sur place' ||
-                                                selectedDelivery.status === 'Livraison en cours' ||
-                                                selectedDelivery.status === 'Livrée'
-                                                    ? '#10B981'
-                                                    : '#E5E7EB',
-                                        },
-                                    ]}
-                                >
-                                    {(selectedDelivery.status === 'Sur place' ||
-                                        selectedDelivery.status === 'Livraison en cours' ||
-                                        selectedDelivery.status === 'Livrée') && (
-                                        <Text style={styles.progressCheck}>✓</Text>
-                                    )}
-                                </View>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    Sur place
-                                </ThemedText>
-                            </View>
-                            <View style={styles.progressLine} />
-                            <View style={styles.progressStep}>
-                                <View
-                                    style={[
-                                        styles.progressDot,
-                                        {
-                                            backgroundColor:
-                                                selectedDelivery.status === 'Livrée'
-                                                    ? '#10B981'
-                                                    : '#E5E7EB',
-                                        },
-                                    ]}
-                                >
-                                    {selectedDelivery.status === 'Livrée' && (
-                                        <Text style={styles.progressCheck}>✓</Text>
-                                    )}
-                                </View>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    Livrée
-                                </ThemedText>
-                            </View>
-                        </View>
+                    {/* Progress */}
+                    <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
+                        État de la livraison
+                    </ThemedText>
+
+                    <Card padding={16} style={styles.progressCard}>
+                        <Timeline status={selected.status} />
                     </Card>
 
-                    {/* Action Buttons based on status */}
-                    {selectedDelivery.status === 'Prêt pour livraison' && (
-                        <Button
-                            title="🚚 Démarrer la livraison"
+                    {/* Actions */}
+                    {selected.status === "Prêt pour livraison" && (
+                        <CtaPrimary
+                            icon="truck"
+                            label="Démarrer la livraison"
                             onPress={handleStartRoute}
-                            style={styles.actionButton}
                         />
                     )}
-
-                    {selectedDelivery.status === 'En route' && (
-                        <Button
-                            title="📍 Je suis arrivé"
+                    {selected.status === "En route" && (
+                        <CtaPrimary
+                            icon="map"
+                            label="Je suis arrivé"
                             onPress={handleArrived}
-                            style={styles.actionButton}
                         />
                     )}
-
-                    {(selectedDelivery.status === 'Sur place' ||
-                        selectedDelivery.status === 'Livraison en cours') && (
-                        <Button
-                            title="📦 Commencer la remise"
+                    {(selected.status === "Sur place" ||
+                        selected.status === "Livraison en cours") && (
+                        <CtaPrimary
+                            icon="package"
+                            label="Commencer la remise"
                             onPress={handleStartDelivery}
-                            style={styles.actionButton}
                         />
                     )}
-
-                    {selectedDelivery.status === 'Livrée' && (
-                        <View style={styles.completedBanner}>
-                            <Text style={styles.completedIcon}>✅</Text>
+                    {selected.status === "Livrée" && (
+                        <View
+                            style={[
+                                styles.doneBanner,
+                                { backgroundColor: colors.ok100, borderColor: colors.ok600 },
+                            ]}
+                        >
+                            <Icon name="check" size={16} color={colors.ok700} />
                             <View style={{ flex: 1 }}>
-                                <ThemedText variate="subtitle2" style={{ color: '#10B981' }}>
+                                <Text
+                                    style={[styles.doneTitle, { color: colors.ok700 }]}
+                                >
                                     Livraison terminée
-                                </ThemedText>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    Récipient: {selectedDelivery.deliveryProgress?.recipientName}
-                                </ThemedText>
+                                </Text>
+                                <Text
+                                    style={[styles.doneSubtitle, { color: colors.ink600 }]}
+                                >
+                                    Récipient : {selected.deliveryProgress?.recipientName}
+                                </Text>
                             </View>
                         </View>
                     )}
@@ -903,219 +736,248 @@ export default function DeliveryScreen() {
         );
     }
 
-    // COMPLETE VIEW - Photos and signature
-    if (deliveryStep === 'complete' && selectedDelivery) {
+    /* ---------- COMPLETE VIEW ---------- */
+    if (step === "complete" && selected) {
+        const photoCount = selected.deliveryProgress?.photos.length ?? 0;
+        const signed = Boolean(selected.deliveryProgress?.signatureUri);
+        const canComplete = photoCount > 0 && signed;
+
         return (
-            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-                <View style={styles.header}>
-                    <TouchableOpacity
-                        onPress={() => setDeliveryStep('details')}
-                        style={styles.backButton}
-                    >
-                        <Text style={styles.backIcon}>←</Text>
-                    </TouchableOpacity>
-                    <ThemedText variate="headline" color="textPrimary">
-                        Finaliser la livraison
-                    </ThemedText>
-                    <View style={{ width: 40 }} />
+            <SafeAreaView
+                edges={["top"]}
+                style={[styles.container, { backgroundColor: colors.paper2 }]}
+            >
+                <View
+                    style={[
+                        styles.header,
+                        { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
+                    ]}
+                >
+                    <Pressable onPress={() => setStep("details")} hitSlop={8}>
+                        <Icon name="chevLeft" size={20} color={colors.ink800} />
+                    </Pressable>
+                    <ThemedText variate="title">Finaliser</ThemedText>
+                    <View style={{ width: 20 }} />
                 </View>
 
                 <ScrollView
-                    style={{ flex: 1 }}
                     contentContainerStyle={styles.content}
                     showsVerticalScrollIndicator={false}
                 >
-                    <Card style={styles.clientInfoCard}>
-                        <ThemedText variate="subtitle1" color="textPrimary">
-                            {selectedDelivery.clientName}
-                        </ThemedText>
-                        <ThemedText variate="caption" color="textSecondary">
-                            {selectedDelivery.orderNumber}
-                        </ThemedText>
+                    <Card padding={14} style={{ marginBottom: 14 }}>
+                        <Text style={[styles.clientInfoName, { color: colors.ink900 }]}>
+                            {selected.clientName}
+                        </Text>
+                        <Text style={[styles.clientInfoCode, { color: colors.ink500 }]}>
+                            {selected.orderNumber}
+                        </Text>
                     </Card>
 
-                    {/* Step 1: Photos */}
-                    <Card style={styles.stepCard}>
-                        <View style={styles.stepHeader}>
-                            <View
-                                style={[
-                                    styles.stepNumber,
-                                    {
-                                        backgroundColor:
-                                            (selectedDelivery.deliveryProgress?.photos.length || 0) > 0
-                                                ? colors.driverPrimary
-                                                : '#E5E7EB',
-                                    },
-                                ]}
+                    {/* Photos */}
+                    <Card padding={16} style={{ marginBottom: 12 }}>
+                        <StepHeader
+                            index={1}
+                            title="Photos de livraison"
+                            subtitle="Preuve visuelle de la remise"
+                            done={photoCount > 0}
+                        />
+                        <Pressable
+                            onPress={handleTakePhoto}
+                            style={[
+                                styles.dashedBox,
+                                { borderColor: colors.ink300, backgroundColor: colors.paper2 },
+                            ]}
+                        >
+                            <Icon name="camera" size={22} color={colors.ink500} />
+                            <Text
+                                style={[styles.dashedBoxText, { color: colors.ink700 }]}
                             >
-                                <Text
-                                    style={[
-                                        styles.stepNumberText,
-                                        {
-                                            color:
-                                                (selectedDelivery.deliveryProgress?.photos.length || 0) > 0
-                                                    ? '#FFFFFF'
-                                                    : '#9CA3AF',
-                                        },
-                                    ]}
-                                >
-                                    {(selectedDelivery.deliveryProgress?.photos.length || 0) > 0 ? '✓' : '1'}
-                                </Text>
-                            </View>
-                            <ThemedText variate="subtitle2" color="textPrimary">
-                                Photos preuve de livraison
-                            </ThemedText>
-                        </View>
-                        <TouchableOpacity style={styles.photoButton} onPress={handleTakePhoto}>
-                            <Text style={styles.photoIcon}>📸</Text>
-                            <ThemedText variate="body3" color="textSecondary">
-                                {(selectedDelivery.deliveryProgress?.photos.length || 0) === 0
-                                    ? 'Ajouter des photos'
-                                    : `${selectedDelivery.deliveryProgress?.photos.length} photo(s) ajoutée(s)`}
-                            </ThemedText>
-                        </TouchableOpacity>
-                        {(selectedDelivery.deliveryProgress?.photos.length || 0) > 0 && (
-                            <View style={styles.photosList}>
-                                {selectedDelivery.deliveryProgress?.photos.map((photo, index) => (
-                                    <View key={index} style={styles.photoItem}>
-                                        <Text style={{ fontSize: 20 }}>📷</Text>
-                                        <ThemedText variate="caption" color="textSecondary">
-                                            Photo {index + 1}
-                                        </ThemedText>
+                                {photoCount === 0
+                                    ? "Ajouter une photo"
+                                    : `Ajouter une autre photo · ${photoCount} ajoutée${photoCount > 1 ? "s" : ""}`}
+                            </Text>
+                        </Pressable>
+                        {photoCount > 0 && (
+                            <View style={styles.photoList}>
+                                {selected.deliveryProgress?.photos.map((_, i) => (
+                                    <View
+                                        key={i}
+                                        style={[
+                                            styles.photoTile,
+                                            {
+                                                backgroundColor: colors.paper2,
+                                                borderColor: colors.ink200,
+                                            },
+                                        ]}
+                                    >
+                                        <Icon name="camera" size={14} color={colors.ink600} />
+                                        <Text
+                                            style={[styles.photoTileText, { color: colors.ink700 }]}
+                                        >
+                                            Photo {i + 1}
+                                        </Text>
                                     </View>
                                 ))}
                             </View>
                         )}
                     </Card>
 
-                    {/* Step 2: Signature */}
-                    <Card style={styles.stepCard}>
-                        <View style={styles.stepHeader}>
-                            <View
+                    {/* Signature */}
+                    <Card padding={16} style={{ marginBottom: 14 }}>
+                        <StepHeader
+                            index={2}
+                            title="Signature du client"
+                            subtitle="Validation de la réception"
+                            done={signed}
+                        />
+                        {!signed ? (
+                            <Pressable
+                                onPress={() => setShowSignatureModal(true)}
                                 style={[
-                                    styles.stepNumber,
-                                    {
-                                        backgroundColor: selectedDelivery.deliveryProgress?.signatureUri
-                                            ? colors.driverPrimary
-                                            : '#E5E7EB',
-                                    },
+                                    styles.dashedBox,
+                                    { borderColor: colors.ink300, backgroundColor: colors.paper2 },
                                 ]}
                             >
+                                <Icon name="signature" size={22} color={colors.ink500} />
                                 <Text
-                                    style={[
-                                        styles.stepNumberText,
-                                        {
-                                            color: selectedDelivery.deliveryProgress?.signatureUri
-                                                ? '#FFFFFF'
-                                                : '#9CA3AF',
-                                        },
-                                    ]}
+                                    style={[styles.dashedBoxText, { color: colors.ink700 }]}
                                 >
-                                    {selectedDelivery.deliveryProgress?.signatureUri ? '✓' : '2'}
-                                </Text>
-                            </View>
-                            <ThemedText variate="subtitle2" color="textPrimary">
-                                Signature du client
-                            </ThemedText>
-                        </View>
-                        {!selectedDelivery.deliveryProgress?.signatureUri ? (
-                            <TouchableOpacity
-                                style={styles.signatureButton}
-                                onPress={handleSignature}
-                            >
-                                <Text style={styles.signatureIcon}>✍️</Text>
-                                <ThemedText variate="body3" color="textSecondary">
                                     Demander la signature
-                                </ThemedText>
-                            </TouchableOpacity>
+                                </Text>
+                            </Pressable>
                         ) : (
-                            <View style={styles.successBadge}>
-                                <Text style={styles.successIcon}>✓</Text>
+                            <View
+                                style={[
+                                    styles.signedRow,
+                                    { backgroundColor: colors.ok100, borderColor: colors.ok600 },
+                                ]}
+                            >
+                                <Icon name="check" size={14} color={colors.ok700} />
                                 <View style={{ flex: 1 }}>
-                                    <ThemedText
-                                        variate="body3"
-                                        style={{ color: colors.driverPrimary }}
+                                    <Text
+                                        style={[styles.signedTitle, { color: colors.ok700 }]}
                                     >
                                         Signature enregistrée
-                                    </ThemedText>
-                                    <ThemedText variate="caption" color="textSecondary">
-                                        Par: {selectedDelivery.deliveryProgress?.recipientName}
-                                    </ThemedText>
+                                    </Text>
+                                    <Text
+                                        style={[styles.signedSub, { color: colors.ink600 }]}
+                                    >
+                                        Par : {selected.deliveryProgress?.recipientName}
+                                    </Text>
                                 </View>
                             </View>
                         )}
                     </Card>
 
-                    <Button
-                        title="✅ Terminer la livraison"
+                    <Pressable
                         onPress={handleCompleteDelivery}
-                        style={styles.actionButton}
-                        disabled={
-                            (selectedDelivery.deliveryProgress?.photos.length || 0) === 0 ||
-                            !selectedDelivery.deliveryProgress?.signatureUri
-                        }
-                    />
+                        disabled={!canComplete}
+                        style={[
+                            styles.completeCta,
+                            {
+                                backgroundColor: canComplete ? colors.baobab600 : colors.ink300,
+                            },
+                        ]}
+                    >
+                        <Icon name="check" size={16} color={colors.paper} />
+                        <Text
+                            style={[styles.completeCtaText, { color: colors.paper }]}
+                        >
+                            Terminer la livraison
+                        </Text>
+                    </Pressable>
 
-                    {/* Signature Modal */}
+                    {/* Signature modal */}
                     <Modal
                         visible={showSignatureModal}
-                        transparent={true}
+                        transparent
                         animationType="slide"
                         onRequestClose={() => setShowSignatureModal(false)}
                     >
                         <View style={styles.modalOverlay}>
-                            <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
-                                <ThemedText variate="headline" color="textPrimary" style={{ marginBottom: Spacing.lg }}>
+                            <View
+                                style={[
+                                    styles.modalContent,
+                                    { backgroundColor: colors.paper },
+                                ]}
+                            >
+                                <ThemedText variate="title" style={{ marginBottom: 14 }}>
                                     Signature du client
                                 </ThemedText>
 
-                                <ThemedText variate="body3" color="textSecondary" style={{ marginBottom: Spacing.md }}>
+                                <Text
+                                    style={[styles.fieldLabel, { color: colors.ink700 }]}
+                                >
                                     Nom du destinataire
-                                </ThemedText>
-                                <View style={styles.input}>
+                                </Text>
+                                <TextInput
+                                    value={recipientName}
+                                    onChangeText={setRecipientName}
+                                    placeholder="Ex: M. Diallo"
+                                    placeholderTextColor={colors.ink400}
+                                    style={[
+                                        styles.modalInput,
+                                        {
+                                            backgroundColor: colors.paper2,
+                                            borderColor: colors.ink200,
+                                            color: colors.ink900,
+                                        },
+                                    ]}
+                                />
+
+                                <View
+                                    style={[
+                                        styles.signaturePad,
+                                        {
+                                            backgroundColor: colors.paper2,
+                                            borderColor: colors.ink300,
+                                        },
+                                    ]}
+                                >
+                                    <Icon name="signature" size={36} color={colors.ink400} />
                                     <Text
-                                        style={styles.inputText}
-                                        onPress={() => {
-                                            Alert.prompt(
-                                                'Nom du destinataire',
-                                                'Entrez le nom de la personne qui reçoit la livraison',
-                                                (text) => setRecipientName(text),
-                                                'plain-text',
-                                                recipientName
-                                            );
-                                        }}
+                                        style={[styles.signaturePadText, { color: colors.ink500 }]}
                                     >
-                                        {recipientName || 'Toucher pour entrer le nom'}
+                                        Zone de signature
                                     </Text>
                                 </View>
 
-                                <View style={styles.signaturePad}>
-                                    <Text style={{ fontSize: 64, textAlign: 'center' }}>✍️</Text>
-                                    <ThemedText variate="caption" color="textSecondary" style={{ textAlign: 'center' }}>
-                                        Zone de signature
-                                    </ThemedText>
-                                </View>
-
                                 <View style={styles.modalButtons}>
-                                    <TouchableOpacity
-                                        style={[styles.modalButton, styles.modalButtonSecondary]}
+                                    <Pressable
                                         onPress={() => {
                                             setShowSignatureModal(false);
-                                            setRecipientName('');
+                                            setRecipientName("");
                                         }}
-                                    >
-                                        <Text style={styles.modalButtonTextSecondary}>Annuler</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
                                         style={[
-                                            styles.modalButton,
-                                            styles.modalButtonPrimary,
-                                            { backgroundColor: colors.driverPrimary },
+                                            styles.modalBtn,
+                                            {
+                                                backgroundColor: colors.paper2,
+                                                borderColor: colors.ink200,
+                                            },
                                         ]}
-                                        onPress={handleSaveSignature}
                                     >
-                                        <Text style={styles.modalButtonTextPrimary}>Valider</Text>
-                                    </TouchableOpacity>
+                                        <Text
+                                            style={[styles.modalBtnText, { color: colors.ink700 }]}
+                                        >
+                                            Annuler
+                                        </Text>
+                                    </Pressable>
+                                    <Pressable
+                                        onPress={handleSaveSignature}
+                                        style={[
+                                            styles.modalBtn,
+                                            {
+                                                backgroundColor: colors.brand800,
+                                                borderColor: colors.brand800,
+                                            },
+                                        ]}
+                                    >
+                                        <Text
+                                            style={[styles.modalBtnText, { color: colors.paper }]}
+                                        >
+                                            Valider
+                                        </Text>
+                                    </Pressable>
                                 </View>
                             </View>
                         </View>
@@ -1128,355 +990,712 @@ export default function DeliveryScreen() {
     return null;
 }
 
+/* ---------- Sub-components ---------- */
+
+function DeliveryListItem({
+    delivery,
+    index,
+    onPress,
+    compact = false,
+}: {
+    delivery: DeliveryOrder;
+    index: number;
+    onPress: () => void;
+    compact?: boolean;
+}) {
+    const colors = useThemeColors();
+    const isDone = delivery.status === "Livrée";
+    return (
+        <Pressable
+            onPress={onPress}
+            style={({ pressed }) => [
+                styles.deliveryItem,
+                {
+                    backgroundColor: colors.paper,
+                    borderColor: colors.ink200,
+                    opacity: pressed ? 0.8 : compact ? 0.85 : 1,
+                },
+            ]}
+        >
+            <View style={styles.deliveryTop}>
+                <View
+                    style={[
+                        styles.deliveryIndex,
+                        {
+                            backgroundColor: isDone ? colors.ok100 : colors.brand100,
+                        },
+                    ]}
+                >
+                    {isDone ? (
+                        <Icon name="check" size={12} color={colors.ok700} />
+                    ) : (
+                        <Text
+                            style={[styles.deliveryIndexText, { color: colors.brand800 }]}
+                        >
+                            {index}
+                        </Text>
+                    )}
+                </View>
+                <View style={{ flex: 1 }}>
+                    <Text
+                        style={[styles.deliveryCode, { color: colors.ink900 }]}
+                    >
+                        {delivery.orderNumber}
+                    </Text>
+                    <Text style={[styles.deliveryClient, { color: colors.ink600 }]}>
+                        {delivery.clientName}
+                    </Text>
+                </View>
+                <View style={styles.deliveryRight}>
+                    <Text
+                        style={[styles.deliveryTime, { color: colors.ink900 }]}
+                    >
+                        {delivery.deliveryTime}
+                    </Text>
+                    <Text
+                        style={[styles.deliveryDate, { color: colors.ink500 }]}
+                    >
+                        {new Date(delivery.deliveryDate).toLocaleDateString("fr-FR", {
+                            day: "2-digit",
+                            month: "short",
+                        })}
+                    </Text>
+                </View>
+            </View>
+
+            {!compact && (
+                <View style={styles.deliveryMetaRow}>
+                    <MetaLight icon="weight" label={formatWeight(delivery.actualWeight)} />
+                    <MetaLight icon="package" label={`${delivery.triage.totalPieces} pcs`} />
+                    <MetaLight icon="tag" label={formatCurrency(delivery.triage.totalAmount)} />
+                </View>
+            )}
+
+            <View style={styles.deliveryAddress}>
+                <Icon name="map" size={11} color={colors.ink500} />
+                <Text
+                    style={[styles.deliveryAddressText, { color: colors.ink500 }]}
+                    numberOfLines={1}
+                >
+                    {delivery.clientAddress}
+                </Text>
+            </View>
+
+            <View style={styles.deliveryFooter}>
+                <StatusBadge status={STATUS_TO_UI[delivery.status]} />
+                {isDone && delivery.deliveryProgress?.recipientName && (
+                    <Text
+                        style={[styles.deliverySigned, { color: colors.ink500 }]}
+                    >
+                        Signé : {delivery.deliveryProgress.recipientName}
+                    </Text>
+                )}
+            </View>
+        </Pressable>
+    );
+}
+
+function Total({
+    label,
+    value,
+    colors,
+    accent = false,
+}: {
+    label: string;
+    value: string;
+    colors: ReturnType<typeof useThemeColors>;
+    accent?: boolean;
+}) {
+    return (
+        <View style={{ flex: 1 }}>
+            <Text
+                style={[
+                    styles.totalValue,
+                    { color: accent ? colors.terra600 : colors.paper },
+                ]}
+            >
+                {value}
+            </Text>
+            <Text style={[styles.totalLabel, { color: colors.brand100 }]}>
+                {label}
+            </Text>
+        </View>
+    );
+}
+
+function Timeline({ status }: { status: DeliveryStatus }) {
+    const colors = useThemeColors();
+    const steps: { key: DeliveryStatus | "ready"; label: string; icon: IconName }[] = [
+        { key: "ready", label: "Prêt", icon: "check" },
+        { key: "En route", label: "En route", icon: "truck" },
+        { key: "Sur place", label: "Sur place", icon: "map" },
+        { key: "Livrée", label: "Livrée", icon: "check" },
+    ];
+    const statusIndex: Record<DeliveryStatus, number> = {
+        "Prêt pour livraison": 0,
+        "En route": 1,
+        "Sur place": 2,
+        "Livraison en cours": 2,
+        Livrée: 3,
+    };
+    const current = statusIndex[status];
+
+    return (
+        <View style={styles.timelineRow}>
+            {steps.map((s, i) => {
+                const done = i <= current;
+                const active = i === current;
+                return (
+                    <View key={s.label} style={styles.timelineStep}>
+                        <View
+                            style={[
+                                styles.timelineDot,
+                                {
+                                    backgroundColor: done
+                                        ? active
+                                            ? colors.baobab600
+                                            : colors.ok600
+                                        : colors.ink100,
+                                    borderColor: active ? colors.baobab600 : "transparent",
+                                    borderWidth: active ? 3 : 0,
+                                },
+                            ]}
+                        >
+                            <Icon
+                                name={s.icon}
+                                size={13}
+                                color={done ? colors.paper : colors.ink500}
+                            />
+                        </View>
+                        <Text
+                            style={[
+                                styles.timelineLabel,
+                                { color: done ? colors.ink900 : colors.ink500 },
+                            ]}
+                        >
+                            {s.label}
+                        </Text>
+                        {i < steps.length - 1 && (
+                            <View
+                                style={[
+                                    styles.timelineLine,
+                                    {
+                                        backgroundColor:
+                                            i < current ? colors.ok600 : colors.ink200,
+                                    },
+                                ]}
+                            />
+                        )}
+                    </View>
+                );
+            })}
+        </View>
+    );
+}
+
+function StepHeader({
+    index,
+    title,
+    subtitle,
+    done,
+}: {
+    index: number;
+    title: string;
+    subtitle: string;
+    done: boolean;
+}) {
+    const colors = useThemeColors();
+    return (
+        <View style={styles.stepHeaderRow}>
+            <View
+                style={[
+                    styles.stepNumber,
+                    {
+                        backgroundColor: done ? colors.baobab600 : colors.ink100,
+                        borderColor: done ? colors.baobab600 : colors.ink200,
+                    },
+                ]}
+            >
+                {done ? (
+                    <Icon name="check" size={13} color={colors.paper} />
+                ) : (
+                    <Text style={[styles.stepNumberText, { color: colors.ink700 }]}>
+                        {index}
+                    </Text>
+                )}
+            </View>
+            <View style={{ flex: 1 }}>
+                <Text style={[styles.stepTitle, { color: colors.ink900 }]}>
+                    {title}
+                </Text>
+                <Text style={[styles.stepSubtitle, { color: colors.ink500 }]}>
+                    {subtitle}
+                </Text>
+            </View>
+        </View>
+    );
+}
+
+function MetaLight({ icon, label }: { icon: IconName; label: string }) {
+    const colors = useThemeColors();
+    return (
+        <View style={styles.metaLight}>
+            <Icon name={icon} size={11} color={colors.ink500} />
+            <Text style={[styles.metaLightText, { color: colors.ink700 }]}>
+                {label}
+            </Text>
+        </View>
+    );
+}
+
+function CtaPrimary({
+    icon,
+    label,
+    onPress,
+}: {
+    icon: IconName;
+    label: string;
+    onPress: () => void;
+}) {
+    const colors = useThemeColors();
+    return (
+        <Pressable
+            onPress={onPress}
+            style={[styles.ctaPrimary, { backgroundColor: colors.brand800 }]}
+        >
+            <Icon name={icon} size={15} color={colors.paper} />
+            <Text style={[styles.ctaPrimaryText, { color: colors.paper }]}>
+                {label}
+            </Text>
+            <Icon name="arrowRight" size={14} color={colors.paper} />
+        </Pressable>
+    );
+}
+
+/* ---------- Styles ---------- */
+
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
+    container: { flex: 1 },
     header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: Spacing.padding.screen,
-        paddingTop: Spacing.sm,
-        paddingBottom: Spacing.md,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
     },
-    badge: {
-        backgroundColor: '#F3F4F6',
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.xs,
-        borderRadius: Spacing.borderRadius.full,
+    content: { padding: 16, paddingBottom: 120 },
+
+    countBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 3,
+        borderRadius: 999,
+        borderWidth: StyleSheet.hairlineWidth,
     },
-    badgeText: {
+    countBadgeText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.tiny,
+    },
+
+    sectionLabel: { marginBottom: 10, paddingLeft: 4 },
+
+    emptyState: {
+        alignItems: "center",
+        justifyContent: "center",
+        paddingVertical: 60,
+        gap: 12,
+    },
+    emptyText: {
+        fontFamily: FontFamily.uiMedium,
         fontSize: Typography.fontSize.sm,
-        fontWeight: Typography.fontWeight.bold,
     },
-    backButton: {
-        width: 40,
-        height: 40,
-        justifyContent: 'center',
-        alignItems: 'center',
+
+    // List item
+    deliveryItem: {
+        borderRadius: 14,
+        borderWidth: StyleSheet.hairlineWidth,
+        padding: 14,
     },
-    backIcon: {
-        fontSize: 28,
-        color: '#374151',
+    deliveryTop: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        marginBottom: 10,
     },
-    content: {
-        padding: Spacing.padding.screen,
-        paddingBottom: Spacing.xxxl + 20,
+    deliveryIndex: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: "center",
+        justifyContent: "center",
     },
-    deliveryCard: {
-        marginBottom: Spacing.md,
+    deliveryIndexText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
     },
-    deliveryHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.md,
-        marginBottom: Spacing.md,
+    deliveryCode: {
+        fontFamily: FontFamily.monoMedium,
+        fontSize: Typography.fontSize.sm,
     },
-    deliveryNumber: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#F3F4F6',
-        justifyContent: 'center',
-        alignItems: 'center',
+    deliveryClient: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 2,
     },
-    deliveryNumberText: {
-        fontSize: Typography.fontSize.lg,
-        fontWeight: Typography.fontWeight.bold,
-    },
+    deliveryRight: { alignItems: "flex-end" },
     deliveryTime: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.xs,
-    },
-    timeIcon: {
+        fontFamily: FontFamily.serifMedium,
         fontSize: 16,
     },
-    deliveryStats: {
-        flexDirection: 'row',
-        gap: Spacing.lg,
-        marginBottom: Spacing.md,
+    deliveryDate: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
     },
-    stat: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.xs,
+    deliveryMetaRow: {
+        flexDirection: "row",
+        gap: 14,
+        marginBottom: 8,
     },
-    statIcon: {
-        fontSize: 16,
+    metaLight: { flexDirection: "row", alignItems: "center", gap: 4 },
+    metaLightText: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.tiny,
     },
     deliveryAddress: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: Spacing.xs,
-        marginBottom: Spacing.md,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 5,
+        marginBottom: 10,
     },
-    addressIcon: {
-        fontSize: 14,
-    },
-    statusBadge: {
-        paddingVertical: Spacing.xs,
-        paddingHorizontal: Spacing.md,
-        borderRadius: Spacing.borderRadius.md,
-        alignSelf: 'flex-start',
-    },
-    emptyState: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: Spacing.xxxl,
-    },
-    emptyIcon: {
-        fontSize: 64,
-        marginBottom: Spacing.md,
-    },
-    slipHeader: {
-        marginBottom: Spacing.lg,
-    },
-    slipRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: Spacing.sm,
-    },
-    summaryCard: {
-        marginBottom: Spacing.lg,
-    },
-    sectionTitle: {
-        marginBottom: Spacing.md,
-    },
-    summaryGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: Spacing.md,
-    },
-    summaryItem: {
+    deliveryAddressText: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
         flex: 1,
-        minWidth: '45%',
-        backgroundColor: '#F9FAFB',
-        padding: Spacing.md,
-        borderRadius: Spacing.borderRadius.md,
     },
-    summaryItemFull: {
-        minWidth: '100%',
-        backgroundColor: '#F0FDF4',
+    deliveryFooter: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 10,
     },
-    triageCard: {
-        marginBottom: Spacing.lg,
+    deliverySigned: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.tiny,
     },
-    triageTable: {
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        borderRadius: Spacing.borderRadius.md,
-        overflow: 'hidden',
+
+    // Order header (bordereau)
+    orderHeaderCard: { marginBottom: 14 },
+    orderHeaderTop: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
     },
-    tableHeader: {
-        flexDirection: 'row',
-        backgroundColor: '#F3F4F6',
-        paddingVertical: Spacing.sm,
-        paddingHorizontal: Spacing.sm,
+    orderCaps: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.micro,
+        letterSpacing: 1.2,
+        textTransform: "uppercase",
+    },
+    orderNumber: {
+        fontFamily: FontFamily.monoMedium,
+        fontSize: 20,
+        marginTop: 6,
+    },
+    orderClient: {
+        fontFamily: FontFamily.serifMedium,
+        fontSize: 16,
+        marginTop: 6,
+    },
+    addressRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 5,
+        marginTop: 6,
+    },
+    addressText: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        flex: 1,
+    },
+    orderTotals: {
+        flexDirection: "row",
+        gap: 16,
+        marginTop: 14,
+        paddingTop: 14,
+        borderTopWidth: StyleSheet.hairlineWidth,
+    },
+    totalValue: {
+        fontFamily: FontFamily.monoMedium,
+        fontSize: 16,
+    },
+    totalLabel: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
+        marginTop: 2,
+    },
+
+    // Table
+    tableHead: {
+        flexDirection: "row",
+        paddingVertical: 10,
+        paddingHorizontal: 10,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    tableHeadCell: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.micro,
+        letterSpacing: 0.5,
+        textTransform: "uppercase",
     },
     tableRow: {
-        flexDirection: 'row',
-        paddingVertical: Spacing.md,
-        paddingHorizontal: Spacing.sm,
-        borderTopWidth: 1,
-        borderTopColor: '#E5E7EB',
+        flexDirection: "row",
+        paddingVertical: 10,
+        paddingHorizontal: 10,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        alignItems: "center",
+    },
+    tableCell: { paddingHorizontal: 4 },
+    cellType: { flex: 2.2 },
+    cellQty: { flex: 0.7, textAlign: "right" },
+    cellWeight: { flex: 1, textAlign: "right" },
+    cellPrice: { flex: 1.4, textAlign: "right" },
+    itemCode: {
+        fontFamily: FontFamily.monoMedium,
+        fontSize: Typography.fontSize.tiny,
+    },
+    itemName: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
+        marginTop: 1,
+    },
+    mono: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.sm,
     },
     tableFooter: {
-        backgroundColor: '#F9FAFB',
+        flexDirection: "row",
+        paddingVertical: 12,
+        paddingHorizontal: 10,
     },
-    tableCell: {
-        justifyContent: 'center',
+    footerLabel: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
     },
-    tableCellType: {
-        flex: 2,
+    footerValue: {
+        fontFamily: FontFamily.monoMedium,
+        fontSize: Typography.fontSize.sm,
     },
-    tableCellQty: {
-        flex: 1,
-        textAlign: 'center',
+
+    // Progress / Timeline
+    progressCard: { marginBottom: 14 },
+    timelineRow: { flexDirection: "row", alignItems: "flex-start" },
+    timelineStep: { flex: 1, alignItems: "center", position: "relative" },
+    timelineDot: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: "center",
+        justifyContent: "center",
     },
-    tableCellWeight: {
-        flex: 1.2,
-        textAlign: 'right',
+    timelineLabel: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.micro,
+        marginTop: 6,
+        textAlign: "center",
     },
-    tableCellPrice: {
-        flex: 1.5,
-        textAlign: 'right',
+    timelineLine: {
+        position: "absolute",
+        height: 2,
+        top: 15,
+        left: "60%",
+        right: "-40%",
     },
-    actionButton: {
-        marginTop: Spacing.lg,
+
+    // Ctas
+    ctaPrimary: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        paddingVertical: 14,
+        borderRadius: 12,
     },
-    clientInfoCard: {
-        marginBottom: Spacing.lg,
-        backgroundColor: '#F0F9FF',
+    ctaPrimaryText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.base,
     },
-    stepCard: {
-        marginBottom: Spacing.lg,
+    doneBanner: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        padding: 14,
+        borderRadius: 12,
+        borderWidth: StyleSheet.hairlineWidth,
     },
-    stepHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.md,
-        marginBottom: Spacing.md,
+    doneTitle: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
+    },
+    doneSubtitle: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 2,
+    },
+
+    // Complete view
+    clientInfoName: {
+        fontFamily: FontFamily.serifMedium,
+        fontSize: 16,
+    },
+    clientInfoCode: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 2,
+    },
+
+    stepHeaderRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        marginBottom: 12,
     },
     stepNumber: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        justifyContent: 'center',
-        alignItems: 'center',
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        borderWidth: StyleSheet.hairlineWidth,
+        alignItems: "center",
+        justifyContent: "center",
     },
     stepNumberText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
+    },
+    stepTitle: {
+        fontFamily: FontFamily.uiSemibold,
         fontSize: Typography.fontSize.md,
-        fontWeight: Typography.fontWeight.bold,
     },
-    photoButton: {
-        borderWidth: 2,
-        borderStyle: 'dashed',
-        borderColor: '#D1D5DB',
-        borderRadius: Spacing.borderRadius.lg,
-        padding: Spacing.xl,
-        alignItems: 'center',
-        gap: Spacing.sm,
+    stepSubtitle: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 2,
     },
-    photoIcon: {
-        fontSize: 48,
+
+    dashedBox: {
+        borderWidth: 1.25,
+        borderStyle: "dashed",
+        borderRadius: 12,
+        paddingVertical: 22,
+        paddingHorizontal: 16,
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
     },
-    signatureButton: {
-        borderWidth: 2,
-        borderStyle: 'dashed',
-        borderColor: '#D1D5DB',
-        borderRadius: Spacing.borderRadius.lg,
-        padding: Spacing.xl,
-        alignItems: 'center',
-        gap: Spacing.sm,
+    dashedBoxText: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.sm,
     },
-    signatureIcon: {
-        fontSize: 48,
+
+    photoList: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
+    photoTile: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 5,
+        paddingHorizontal: 8,
+        paddingVertical: 5,
+        borderRadius: 8,
+        borderWidth: StyleSheet.hairlineWidth,
     },
-    successBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-        backgroundColor: '#10B98110',
-        padding: Spacing.md,
-        borderRadius: Spacing.borderRadius.md,
+    photoTileText: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.tiny,
     },
-    successIcon: {
-        fontSize: 20,
-        color: '#10B981',
+
+    signedRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        padding: 12,
+        borderRadius: 10,
+        borderWidth: StyleSheet.hairlineWidth,
     },
-    progressCard: {
-        marginBottom: Spacing.lg,
+    signedTitle: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
     },
-    progressSteps: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+    signedSub: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 2,
     },
-    progressStep: {
-        alignItems: 'center',
-        gap: Spacing.xs,
+
+    completeCta: {
+        marginTop: 8,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        paddingVertical: 14,
+        borderRadius: 12,
     },
-    progressDot: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        justifyContent: 'center',
-        alignItems: 'center',
+    completeCtaText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.base,
     },
-    progressCheck: {
-        fontSize: 20,
-        color: '#FFFFFF',
-    },
-    progressLine: {
-        flex: 1,
-        height: 2,
-        backgroundColor: '#E5E7EB',
-        marginHorizontal: Spacing.xs,
-    },
-    completedBanner: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.md,
-        backgroundColor: '#10B98110',
-        padding: Spacing.lg,
-        borderRadius: Spacing.borderRadius.lg,
-        marginTop: Spacing.lg,
-    },
-    completedIcon: {
-        fontSize: 32,
-    },
-    photosList: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: Spacing.sm,
-        marginTop: Spacing.md,
-    },
-    photoItem: {
-        alignItems: 'center',
-        gap: Spacing.xs,
-        padding: Spacing.sm,
-        backgroundColor: '#F3F4F6',
-        borderRadius: Spacing.borderRadius.md,
-        minWidth: 80,
-    },
+
+    // Modal
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        justifyContent: 'flex-end',
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        justifyContent: "flex-end",
     },
     modalContent: {
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        padding: Spacing.xl,
-        paddingBottom: Spacing.xxxl,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        padding: 20,
+        paddingBottom: 40,
     },
-    input: {
-        borderWidth: 1,
-        borderColor: '#D1D5DB',
-        borderRadius: Spacing.borderRadius.md,
-        padding: Spacing.md,
-        marginBottom: Spacing.lg,
+    fieldLabel: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.tiny,
+        marginBottom: 6,
     },
-    inputText: {
-        fontSize: Typography.fontSize.md,
-        color: '#374151',
+    modalInput: {
+        borderWidth: StyleSheet.hairlineWidth,
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.sm,
+        marginBottom: 14,
     },
     signaturePad: {
-        borderWidth: 2,
-        borderStyle: 'dashed',
-        borderColor: '#D1D5DB',
-        borderRadius: Spacing.borderRadius.lg,
-        padding: Spacing.xxxl,
-        marginBottom: Spacing.lg,
-        backgroundColor: '#F9FAFB',
+        borderWidth: 1.25,
+        borderStyle: "dashed",
+        borderRadius: 12,
+        paddingVertical: 36,
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        marginBottom: 16,
+    },
+    signaturePadText: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.tiny,
     },
     modalButtons: {
-        flexDirection: 'row',
-        gap: Spacing.md,
+        flexDirection: "row",
+        gap: 10,
     },
-    modalButton: {
+    modalBtn: {
         flex: 1,
-        paddingVertical: Spacing.md,
-        borderRadius: Spacing.borderRadius.md,
-        alignItems: 'center',
+        paddingVertical: 12,
+        borderRadius: 10,
+        borderWidth: StyleSheet.hairlineWidth,
+        alignItems: "center",
     },
-    modalButtonPrimary: {
-        backgroundColor: '#3B82F6',
-    },
-    modalButtonSecondary: {
-        backgroundColor: '#F3F4F6',
-    },
-    modalButtonTextPrimary: {
-        color: '#FFFFFF',
-        fontSize: Typography.fontSize.md,
-        fontWeight: Typography.fontWeight.semibold,
-    },
-    modalButtonTextSecondary: {
-        color: '#374151',
-        fontSize: Typography.fontSize.md,
-        fontWeight: Typography.fontWeight.semibold,
+    modalBtnText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
     },
 });

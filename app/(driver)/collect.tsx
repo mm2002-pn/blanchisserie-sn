@@ -1,443 +1,675 @@
-import React, { useState } from 'react';
+import { useState } from "react";
 import {
-    View,
-    Text,
-    StyleSheet,
-    ScrollView,
-    TouchableOpacity,
-    SafeAreaView,
     Alert,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
     TextInput,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { useThemeColors } from '@/hooks/useThemeColors';
-import Card from '@/components/ui/Card';
-import ThemedText from '@/components/ui/ThemedText';
-import Button from '@/components/ui/Button';
-import { Spacing } from '@/constants/Spacing';
-import { Typography } from '@/constants/Typography';
+    View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+
+import Card from "@/components/ui/Card";
+import Icon, { IconName } from "@/components/ui/Icon";
+import ThemedText from "@/components/ui/ThemedText";
+import { FontFamily, Typography } from "@/constants/Typography";
+import { useThemeColors } from "@/hooks/useThemeColors";
+
+type StepId = "qr" | "qty" | "photos" | "signature";
 
 export default function CollectScreen() {
     const router = useRouter();
     const colors = useThemeColors();
 
-    const [step, setStep] = useState(1); // 1: Arrivée, 2: Scan, 3: Saisie, 4: Photos, 5: Signature
-    const [chariots, setChariots] = useState('');
-    const [sacs, setSacs] = useState('');
-    const [notes, setNotes] = useState('');
+    const [chariots, setChariots] = useState("");
+    const [sacs, setSacs] = useState("");
+    const [notes, setNotes] = useState("");
     const [qrScanned, setQrScanned] = useState(false);
     const [photosAdded, setPhotosAdded] = useState(0);
     const [signed, setSigned] = useState(false);
 
     const currentClient = {
-        nom: 'King Fahd Palace',
-        adresse: 'Route de la Corniche Ouest',
-        contact: 'M. Diallo - +221 77 123 45 67',
-        volume: 'XL - 45kg',
+        nom: "King Fahd Palace",
+        adresse: "Route de la Corniche Ouest",
+        contact: "M. Diallo · +221 77 123 45 67",
+        volume: "≈ 45 kg",
+        heure: "11:30",
     };
 
+    const qtyDone = Boolean(chariots && sacs);
+    const photosDone = photosAdded > 0;
+    const allDone = qrScanned && qtyDone && photosDone && signed;
+
+    const completedSteps = [qrScanned, qtyDone, photosDone, signed].filter(
+        Boolean,
+    ).length;
+
     const handleScanQR = () => {
-        // TODO: Implement QR Scanner
         setQrScanned(true);
-        Alert.alert('QR Code scanné', 'Client vérifié avec succès');
+        Alert.alert("QR Code scanné", "Client vérifié avec succès");
     };
 
     const handleAddPhoto = () => {
-        // TODO: Implement Camera
-        setPhotosAdded(photosAdded + 1);
+        setPhotosAdded((n) => n + 1);
     };
 
     const handleSign = () => {
-        // TODO: Implement Signature Pad
         setSigned(true);
-        Alert.alert('Signature', 'Signature enregistrée');
+        Alert.alert("Signature", "Signature enregistrée");
     };
 
     const handleComplete = () => {
-        if (!qrScanned || !chariots || !sacs || photosAdded === 0 || !signed) {
-            Alert.alert('Attention', 'Veuillez compléter toutes les étapes');
+        if (!allDone) {
+            Alert.alert("Attention", "Veuillez compléter toutes les étapes");
             return;
         }
         Alert.alert(
-            'Collecte terminée',
-            'La collecte a été enregistrée avec succès',
-            [
-                {
-                    text: 'OK',
-                    onPress: () => router.back(),
-                },
-            ]
+            "Collecte terminée",
+            "La collecte a été enregistrée avec succès",
+            [{ text: "OK", onPress: () => router.back() }],
         );
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity
-                    onPress={() => router.back()}
-                    style={styles.backButton}
-                >
-                    <Text style={styles.backIcon}>←</Text>
-                </TouchableOpacity>
-                <ThemedText variate="headline" color="textPrimary">
-                    Collecte
-                </ThemedText>
-                <View style={{ width: 40 }} />
+        <SafeAreaView
+            edges={["top"]}
+            style={[styles.container, { backgroundColor: colors.paper2 }]}
+        >
+            <View
+                style={[
+                    styles.header,
+                    { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
+                ]}
+            >
+                <Pressable onPress={() => router.back()} hitSlop={8}>
+                    <Icon name="chevLeft" size={20} color={colors.ink800} />
+                </Pressable>
+                <ThemedText variate="title">Collecte</ThemedText>
+                <View style={{ width: 20 }} />
             </View>
 
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
-                {/* Client Info */}
-                <Card style={[styles.clientCard, { backgroundColor: colors.driverPrimary + '10' }]}>
-                    <View style={styles.clientHeader}>
-                        <Text style={styles.clientIcon}>🏨</Text>
+            <ScrollView
+                contentContainerStyle={styles.content}
+                showsVerticalScrollIndicator={false}
+            >
+                {/* Client hero */}
+                <Card
+                    padding={16}
+                    style={[
+                        styles.clientCard,
+                        { backgroundColor: colors.brand900, borderColor: colors.brand900 },
+                    ]}
+                >
+                    <View style={styles.clientTop}>
+                        <View
+                            style={[
+                                styles.clientAvatar,
+                                { backgroundColor: colors.terra600 },
+                            ]}
+                        >
+                            <Icon name="building" size={18} color={colors.paper} />
+                        </View>
                         <View style={{ flex: 1 }}>
-                            <ThemedText variate="subtitle1" color="textPrimary">
+                            <Text style={[styles.clientName, { color: colors.paper }]}>
                                 {currentClient.nom}
-                            </ThemedText>
-                            <ThemedText variate="caption" color="textSecondary">
+                            </Text>
+                            <Text
+                                style={[styles.clientAddress, { color: colors.brand100 }]}
+                            >
                                 {currentClient.adresse}
-                            </ThemedText>
-                            <View style={styles.clientMeta}>
-                                <Text style={styles.metaIcon}>👤</Text>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    {currentClient.contact}
-                                </ThemedText>
-                            </View>
-                        </View>
-                    </View>
-                </Card>
-
-                {/* Step 1: QR Code Scan */}
-                <Card style={styles.section}>
-                    <View style={styles.stepHeader}>
-                        <View
-                            style={[
-                                styles.stepNumber,
-                                {
-                                    backgroundColor: qrScanned
-                                        ? colors.driverPrimary
-                                        : '#E5E7EB',
-                                },
-                            ]}
-                        >
-                            <Text style={[styles.stepNumberText, { color: qrScanned ? '#FFFFFF' : '#9CA3AF' }]}>
-                                {qrScanned ? '✓' : '1'}
                             </Text>
                         </View>
-                        <ThemedText variate="subtitle2" color="textPrimary">
-                            Scanner le QR Code client
-                        </ThemedText>
                     </View>
-                    {!qrScanned ? (
-                        <TouchableOpacity
-                            style={[styles.scanButton, { backgroundColor: colors.driverPrimary }]}
-                            onPress={handleScanQR}
-                        >
-                            <Text style={styles.scanButtonText}>📷 Scanner le QR Code</Text>
-                        </TouchableOpacity>
-                    ) : (
-                        <View style={styles.successBadge}>
-                            <Text style={styles.successIcon}>✓</Text>
-                            <ThemedText variate="body3" style={{ color: colors.driverPrimary }}>
-                                QR Code scanné avec succès
-                            </ThemedText>
-                        </View>
-                    )}
-                </Card>
 
-                {/* Step 2: Quantity Input */}
-                <Card style={styles.section}>
-                    <View style={styles.stepHeader}>
-                        <View
-                            style={[
-                                styles.stepNumber,
-                                {
-                                    backgroundColor: (chariots && sacs)
-                                        ? colors.driverPrimary
-                                        : '#E5E7EB',
-                                },
-                            ]}
-                        >
-                            <Text style={[styles.stepNumberText, { color: (chariots && sacs) ? '#FFFFFF' : '#9CA3AF' }]}>
-                                {(chariots && sacs) ? '✓' : '2'}
-                            </Text>
-                        </View>
-                        <ThemedText variate="subtitle2" color="textPrimary">
-                            Saisie des quantités
-                        </ThemedText>
-                    </View>
-                    <View style={styles.inputGroup}>
-                        <View style={styles.inputRow}>
-                            <Text style={styles.inputIcon}>🛒</Text>
-                            <View style={{ flex: 1 }}>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    Nombre de chariots
-                                </ThemedText>
-                                <TextInput
-                                    style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]}
-                                    placeholder="Ex: 3"
-                                    placeholderTextColor={colors.textSecondary}
-                                    keyboardType="numeric"
-                                    value={chariots}
-                                    onChangeText={setChariots}
-                                />
-                            </View>
-                        </View>
-                        <View style={styles.inputRow}>
-                            <Text style={styles.inputIcon}>👜</Text>
-                            <View style={{ flex: 1 }}>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    Nombre de sacs
-                                </ThemedText>
-                                <TextInput
-                                    style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]}
-                                    placeholder="Ex: 5"
-                                    placeholderTextColor={colors.textSecondary}
-                                    keyboardType="numeric"
-                                    value={sacs}
-                                    onChangeText={setSacs}
-                                />
-                            </View>
-                        </View>
-                        <View style={styles.inputRow}>
-                            <Text style={styles.inputIcon}>📝</Text>
-                            <View style={{ flex: 1 }}>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    Notes (optionnel)
-                                </ThemedText>
-                                <TextInput
-                                    style={[styles.input, styles.textArea, { color: colors.textPrimary, borderColor: colors.border }]}
-                                    placeholder="Ex: Articles délicats..."
-                                    placeholderTextColor={colors.textSecondary}
-                                    multiline
-                                    numberOfLines={3}
-                                    value={notes}
-                                    onChangeText={setNotes}
-                                />
-                            </View>
-                        </View>
-                    </View>
-                </Card>
-
-                {/* Step 3: Photos */}
-                <Card style={styles.section}>
-                    <View style={styles.stepHeader}>
-                        <View
-                            style={[
-                                styles.stepNumber,
-                                {
-                                    backgroundColor: photosAdded > 0
-                                        ? colors.driverPrimary
-                                        : '#E5E7EB',
-                                },
-                            ]}
-                        >
-                            <Text style={[styles.stepNumberText, { color: photosAdded > 0 ? '#FFFFFF' : '#9CA3AF' }]}>
-                                {photosAdded > 0 ? '✓' : '3'}
-                            </Text>
-                        </View>
-                        <ThemedText variate="subtitle2" color="textPrimary">
-                            Photos de la collecte
-                        </ThemedText>
-                    </View>
-                    <TouchableOpacity
-                        style={styles.photoButton}
-                        onPress={handleAddPhoto}
+                    <View
+                        style={[
+                            styles.clientMetaRow,
+                            { borderTopColor: colors.brand700 },
+                        ]}
                     >
-                        <Text style={styles.photoIcon}>📸</Text>
-                        <ThemedText variate="body3" color="textSecondary">
-                            {photosAdded === 0 ? 'Ajouter des photos' : `${photosAdded} photo(s) ajoutée(s)`}
-                        </ThemedText>
-                    </TouchableOpacity>
+                        <MetaDark icon="user" label={currentClient.contact} />
+                        <MetaDark icon="clock" label={currentClient.heure} />
+                        <MetaDark icon="weight" label={currentClient.volume} />
+                    </View>
                 </Card>
 
-                {/* Step 4: Signature */}
-                <Card style={styles.section}>
-                    <View style={styles.stepHeader}>
+                {/* Progress summary */}
+                <Card padding={14} style={styles.progressCard}>
+                    <View style={styles.progressHeader}>
+                        <ThemedText variate="caps" color="ink500">
+                            Progression
+                        </ThemedText>
+                        <Text style={[styles.progressCount, { color: colors.ink900 }]}>
+                            {completedSteps}
+                            <Text style={[styles.progressDiv, { color: colors.ink500 }]}>
+                                {" / 4 étapes"}
+                            </Text>
+                        </Text>
+                    </View>
+                    <View
+                        style={[styles.progressBar, { backgroundColor: colors.ink200 }]}
+                    >
                         <View
                             style={[
-                                styles.stepNumber,
+                                styles.progressFill,
                                 {
-                                    backgroundColor: signed
-                                        ? colors.driverPrimary
-                                        : '#E5E7EB',
+                                    width: `${(completedSteps / 4) * 100}%`,
+                                    backgroundColor: colors.baobab600,
                                 },
                             ]}
-                        >
-                            <Text style={[styles.stepNumberText, { color: signed ? '#FFFFFF' : '#9CA3AF' }]}>
-                                {signed ? '✓' : '4'}
-                            </Text>
-                        </View>
-                        <ThemedText variate="subtitle2" color="textPrimary">
-                            Signature du client
-                        </ThemedText>
+                        />
                     </View>
-                    {!signed ? (
-                        <TouchableOpacity
-                            style={styles.signatureButton}
-                            onPress={handleSign}
-                        >
-                            <Text style={styles.signatureIcon}>✍️</Text>
-                            <ThemedText variate="body3" color="textSecondary">
-                                Demander la signature
-                            </ThemedText>
-                        </TouchableOpacity>
-                    ) : (
-                        <View style={styles.successBadge}>
-                            <Text style={styles.successIcon}>✓</Text>
-                            <ThemedText variate="body3" style={{ color: colors.driverPrimary }}>
-                                Signature enregistrée
-                            </ThemedText>
-                        </View>
-                    )}
                 </Card>
 
-                {/* Complete Button */}
-                <Button
-                    title="Terminer la collecte"
+                {/* Step 1 — QR */}
+                <StepCard
+                    index={1}
+                    title="Scanner le QR code client"
+                    subtitle="Vérifie l'identité de l'établissement"
+                    done={qrScanned}
+                >
+                    {!qrScanned ? (
+                        <Pressable
+                            onPress={handleScanQR}
+                            style={[
+                                styles.primaryCta,
+                                { backgroundColor: colors.brand800 },
+                            ]}
+                        >
+                            <Icon name="qr" size={15} color={colors.paper} />
+                            <Text style={[styles.primaryCtaText, { color: colors.paper }]}>
+                                Scanner le QR code
+                            </Text>
+                        </Pressable>
+                    ) : (
+                        <SuccessRow label="QR code vérifié" />
+                    )}
+                </StepCard>
+
+                {/* Step 2 — Quantités */}
+                <StepCard
+                    index={2}
+                    title="Saisie des quantités"
+                    subtitle="Chariots et sacs collectés"
+                    done={qtyDone}
+                >
+                    <View style={{ gap: 12 }}>
+                        <FieldNumeric
+                            label="Chariots"
+                            icon="boxes"
+                            value={chariots}
+                            onChangeText={setChariots}
+                            placeholder="Ex: 3"
+                        />
+                        <FieldNumeric
+                            label="Sacs"
+                            icon="package"
+                            value={sacs}
+                            onChangeText={setSacs}
+                            placeholder="Ex: 5"
+                        />
+                        <FieldTextArea
+                            label="Notes (optionnel)"
+                            value={notes}
+                            onChangeText={setNotes}
+                            placeholder="Articles délicats, remarques…"
+                        />
+                    </View>
+                </StepCard>
+
+                {/* Step 3 — Photos */}
+                <StepCard
+                    index={3}
+                    title="Photos de la collecte"
+                    subtitle="Preuve visuelle des chariots et sacs"
+                    done={photosDone}
+                >
+                    <Pressable
+                        onPress={handleAddPhoto}
+                        style={[
+                            styles.dashedBox,
+                            { borderColor: colors.ink300, backgroundColor: colors.paper2 },
+                        ]}
+                    >
+                        <Icon name="camera" size={22} color={colors.ink500} />
+                        <Text
+                            style={[styles.dashedBoxText, { color: colors.ink700 }]}
+                        >
+                            {photosAdded === 0
+                                ? "Ajouter une photo"
+                                : `Ajouter une autre photo · ${photosAdded} ajoutée${photosAdded > 1 ? "s" : ""}`}
+                        </Text>
+                    </Pressable>
+                    {photosAdded > 0 && (
+                        <View style={styles.photoList}>
+                            {Array.from({ length: photosAdded }).map((_, i) => (
+                                <View
+                                    key={i}
+                                    style={[
+                                        styles.photoTile,
+                                        { backgroundColor: colors.paper2, borderColor: colors.ink200 },
+                                    ]}
+                                >
+                                    <Icon name="camera" size={14} color={colors.ink600} />
+                                    <Text
+                                        style={[styles.photoTileText, { color: colors.ink700 }]}
+                                    >
+                                        Photo {i + 1}
+                                    </Text>
+                                </View>
+                            ))}
+                        </View>
+                    )}
+                </StepCard>
+
+                {/* Step 4 — Signature */}
+                <StepCard
+                    index={4}
+                    title="Signature du responsable"
+                    subtitle="Validation du bordereau de collecte"
+                    done={signed}
+                >
+                    {!signed ? (
+                        <Pressable
+                            onPress={handleSign}
+                            style={[
+                                styles.dashedBox,
+                                { borderColor: colors.ink300, backgroundColor: colors.paper2 },
+                            ]}
+                        >
+                            <Icon name="signature" size={22} color={colors.ink500} />
+                            <Text
+                                style={[styles.dashedBoxText, { color: colors.ink700 }]}
+                            >
+                                Demander la signature
+                            </Text>
+                        </Pressable>
+                    ) : (
+                        <SuccessRow label="Signature enregistrée" />
+                    )}
+                </StepCard>
+
+                {/* Complete */}
+                <Pressable
                     onPress={handleComplete}
-                    style={styles.completeButton}
-                />
+                    style={[
+                        styles.completeCta,
+                        {
+                            backgroundColor: allDone ? colors.baobab600 : colors.ink300,
+                        },
+                    ]}
+                    disabled={!allDone}
+                >
+                    <Icon name="check" size={16} color={colors.paper} />
+                    <Text
+                        style={[styles.completeCtaText, { color: colors.paper }]}
+                    >
+                        Terminer la collecte
+                    </Text>
+                </Pressable>
             </ScrollView>
         </SafeAreaView>
     );
 }
 
+/* ---------- sous-composants ---------- */
+
+function StepCard({
+    index,
+    title,
+    subtitle,
+    done,
+    children,
+}: {
+    index: number;
+    title: string;
+    subtitle: string;
+    done: boolean;
+    children: React.ReactNode;
+}) {
+    const colors = useThemeColors();
+    return (
+        <Card padding={16} style={styles.stepCard}>
+            <View style={styles.stepHeader}>
+                <View
+                    style={[
+                        styles.stepNumber,
+                        {
+                            backgroundColor: done ? colors.baobab600 : colors.ink100,
+                            borderColor: done ? colors.baobab600 : colors.ink200,
+                        },
+                    ]}
+                >
+                    {done ? (
+                        <Icon name="check" size={13} color={colors.paper} />
+                    ) : (
+                        <Text
+                            style={[styles.stepNumberText, { color: colors.ink700 }]}
+                        >
+                            {index}
+                        </Text>
+                    )}
+                </View>
+                <View style={{ flex: 1 }}>
+                    <Text style={[styles.stepTitle, { color: colors.ink900 }]}>
+                        {title}
+                    </Text>
+                    <Text style={[styles.stepSubtitle, { color: colors.ink500 }]}>
+                        {subtitle}
+                    </Text>
+                </View>
+            </View>
+            <View style={{ marginTop: 12 }}>{children}</View>
+        </Card>
+    );
+}
+
+function FieldNumeric({
+    label,
+    icon,
+    value,
+    onChangeText,
+    placeholder,
+}: {
+    label: string;
+    icon: IconName;
+    value: string;
+    onChangeText: (v: string) => void;
+    placeholder: string;
+}) {
+    const colors = useThemeColors();
+    return (
+        <View>
+            <Text style={[styles.fieldLabel, { color: colors.ink700 }]}>
+                {label}
+            </Text>
+            <View
+                style={[
+                    styles.fieldRow,
+                    { backgroundColor: colors.paper, borderColor: colors.ink200 },
+                ]}
+            >
+                <Icon name={icon} size={14} color={colors.ink500} />
+                <TextInput
+                    value={value}
+                    onChangeText={onChangeText}
+                    placeholder={placeholder}
+                    placeholderTextColor={colors.ink400}
+                    keyboardType="numeric"
+                    style={[styles.fieldInput, { color: colors.ink900 }]}
+                />
+            </View>
+        </View>
+    );
+}
+
+function FieldTextArea({
+    label,
+    value,
+    onChangeText,
+    placeholder,
+}: {
+    label: string;
+    value: string;
+    onChangeText: (v: string) => void;
+    placeholder: string;
+}) {
+    const colors = useThemeColors();
+    return (
+        <View>
+            <Text style={[styles.fieldLabel, { color: colors.ink700 }]}>
+                {label}
+            </Text>
+            <TextInput
+                value={value}
+                onChangeText={onChangeText}
+                placeholder={placeholder}
+                placeholderTextColor={colors.ink400}
+                multiline
+                numberOfLines={3}
+                style={[
+                    styles.textArea,
+                    {
+                        backgroundColor: colors.paper,
+                        borderColor: colors.ink200,
+                        color: colors.ink900,
+                    },
+                ]}
+            />
+        </View>
+    );
+}
+
+function MetaDark({ icon, label }: { icon: IconName; label: string }) {
+    const colors = useThemeColors();
+    return (
+        <View style={styles.metaDark}>
+            <Icon name={icon} size={12} color={colors.brand100} />
+            <Text style={[styles.metaDarkText, { color: colors.brand100 }]}>
+                {label}
+            </Text>
+        </View>
+    );
+}
+
+function SuccessRow({ label }: { label: string }) {
+    const colors = useThemeColors();
+    return (
+        <View
+            style={[
+                styles.successRow,
+                { backgroundColor: colors.ok100, borderColor: colors.ok600 },
+            ]}
+        >
+            <Icon name="check" size={14} color={colors.ok700} />
+            <Text style={[styles.successText, { color: colors.ok700 }]}>
+                {label}
+            </Text>
+        </View>
+    );
+}
+
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
+    container: { flex: 1 },
     header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: Spacing.padding.screen,
-        paddingTop: Spacing.sm,
-        paddingBottom: Spacing.md,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
     },
-    backButton: {
-        width: 40,
-        height: 40,
-        justifyContent: 'center',
-        alignItems: 'center',
+    content: { padding: 16, paddingBottom: 120 },
+
+    // Client hero
+    clientCard: { marginBottom: 14 },
+    clientTop: { flexDirection: "row", alignItems: "center", gap: 12 },
+    clientAvatar: {
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        alignItems: "center",
+        justifyContent: "center",
     },
-    backIcon: {
-        fontSize: 28,
-        color: '#374151',
+    clientName: {
+        fontFamily: FontFamily.serifMedium,
+        fontSize: 18,
+        letterSpacing: -0.2,
     },
-    content: {
-        padding: Spacing.padding.screen,
-        paddingBottom: Spacing.xxxl,
+    clientAddress: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 2,
     },
-    clientCard: {
-        marginBottom: Spacing.lg,
+    clientMetaRow: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        gap: 12,
+        marginTop: 12,
+        paddingTop: 12,
+        borderTopWidth: StyleSheet.hairlineWidth,
     },
-    clientHeader: {
-        flexDirection: 'row',
-        gap: Spacing.md,
+    metaDark: { flexDirection: "row", alignItems: "center", gap: 5 },
+    metaDarkText: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.tiny,
     },
-    clientIcon: {
-        fontSize: 32,
+
+    // Progress
+    progressCard: { marginBottom: 14 },
+    progressHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 10,
     },
-    clientMeta: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.xs,
-        marginTop: Spacing.xs,
+    progressCount: {
+        fontFamily: FontFamily.monoMedium,
+        fontSize: Typography.fontSize.lg,
     },
-    metaIcon: {
-        fontSize: 14,
-    },
-    section: {
-        marginBottom: Spacing.lg,
-    },
-    stepHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.md,
-        marginBottom: Spacing.md,
-    },
-    stepNumber: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    stepNumberText: {
-        fontSize: Typography.fontSize.md,
-        fontWeight: Typography.fontWeight.bold,
-    },
-    scanButton: {
-        paddingVertical: Spacing.lg,
-        borderRadius: Spacing.borderRadius.md,
-        alignItems: 'center',
-    },
-    scanButtonText: {
-        color: '#FFFFFF',
-        fontSize: Typography.fontSize.md,
-        fontWeight: Typography.fontWeight.semibold,
-    },
-    successBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-        backgroundColor: '#10B98110',
-        padding: Spacing.md,
-        borderRadius: Spacing.borderRadius.md,
-    },
-    successIcon: {
-        fontSize: 20,
-        color: '#10B981',
-    },
-    inputGroup: {
-        gap: Spacing.md,
-    },
-    inputRow: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: Spacing.md,
-    },
-    inputIcon: {
-        fontSize: 24,
-        marginTop: Spacing.sm,
-    },
-    input: {
-        borderWidth: 1,
-        borderRadius: Spacing.borderRadius.md,
-        padding: Spacing.md,
+    progressDiv: {
+        fontFamily: FontFamily.monoRegular,
         fontSize: Typography.fontSize.sm,
     },
+    progressBar: {
+        height: 6,
+        borderRadius: 3,
+        overflow: "hidden",
+    },
+    progressFill: { height: "100%", borderRadius: 3 },
+
+    // Step
+    stepCard: { marginBottom: 12 },
+    stepHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
+    stepNumber: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        borderWidth: StyleSheet.hairlineWidth,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    stepNumberText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
+    },
+    stepTitle: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.md,
+    },
+    stepSubtitle: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 2,
+    },
+
+    // Ctas
+    primaryCta: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        paddingVertical: 12,
+        borderRadius: 10,
+    },
+    primaryCtaText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
+    },
+
+    // Dashed box
+    dashedBox: {
+        borderWidth: 1.25,
+        borderStyle: "dashed",
+        borderRadius: 12,
+        paddingVertical: 22,
+        paddingHorizontal: 16,
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+    },
+    dashedBoxText: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.sm,
+    },
+
+    // Photo tiles
+    photoList: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
+    photoTile: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 5,
+        paddingHorizontal: 8,
+        paddingVertical: 5,
+        borderRadius: 8,
+        borderWidth: StyleSheet.hairlineWidth,
+    },
+    photoTileText: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.tiny,
+    },
+
+    // Fields
+    fieldLabel: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.tiny,
+        marginBottom: 5,
+    },
+    fieldRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+    },
+    fieldInput: {
+        flex: 1,
+        fontFamily: FontFamily.monoMedium,
+        fontSize: Typography.fontSize.sm,
+        padding: 0,
+    },
     textArea: {
-        height: 80,
-        textAlignVertical: 'top',
+        borderWidth: StyleSheet.hairlineWidth,
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        minHeight: 74,
+        textAlignVertical: "top",
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.sm,
     },
-    photoButton: {
-        borderWidth: 2,
-        borderStyle: 'dashed',
-        borderColor: '#D1D5DB',
-        borderRadius: Spacing.borderRadius.lg,
-        padding: Spacing.xl,
-        alignItems: 'center',
-        gap: Spacing.sm,
+
+    // Success
+    successRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 10,
+        borderWidth: StyleSheet.hairlineWidth,
     },
-    photoIcon: {
-        fontSize: 48,
+    successText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
     },
-    signatureButton: {
-        borderWidth: 2,
-        borderStyle: 'dashed',
-        borderColor: '#D1D5DB',
-        borderRadius: Spacing.borderRadius.lg,
-        padding: Spacing.xl,
-        alignItems: 'center',
-        gap: Spacing.sm,
+
+    // Complete CTA
+    completeCta: {
+        marginTop: 8,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        paddingVertical: 14,
+        borderRadius: 12,
     },
-    signatureIcon: {
-        fontSize: 48,
-    },
-    completeButton: {
-        marginTop: Spacing.lg,
+    completeCtaText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.base,
     },
 });

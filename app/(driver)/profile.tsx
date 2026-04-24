@@ -1,24 +1,32 @@
-import React, { useState } from 'react';
+import { useState } from "react";
 import {
-    View,
-    Text,
-    StyleSheet,
-    ScrollView,
-    TouchableOpacity,
-    SafeAreaView,
     Alert,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { useAuth } from '@/contexts/AuthContext';
-import { useThemeColors } from '@/hooks/useThemeColors';
-import Card from '@/components/ui/Card';
-import ThemedText from '@/components/ui/ThemedText';
-import DrawerMenu from '@/components/shared/DrawerMenu';
-import { Spacing } from '@/constants/Spacing';
-import { Typography } from '@/constants/Typography';
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+import Card from "@/components/ui/Card";
+import Icon, { IconName } from "@/components/ui/Icon";
+import ThemedText from "@/components/ui/ThemedText";
+import DrawerMenu from "@/components/shared/DrawerMenu";
+import { useAuth } from "@/contexts/AuthContext";
+import { FontFamily, Typography } from "@/constants/Typography";
+import { useThemeColors } from "@/hooks/useThemeColors";
+
+type DocStatus = "valid" | "expiring" | "expired";
+
+type Document = {
+    id: string;
+    name: string;
+    status: DocStatus;
+    expiry: string;
+};
 
 export default function DriverProfileScreen() {
-    const router = useRouter();
     const { user } = useAuth();
     const colors = useThemeColors();
     const [drawerVisible, setDrawerVisible] = useState(false);
@@ -31,526 +39,661 @@ export default function DriverProfileScreen() {
     };
 
     const assignedVehicle = {
-        model: 'Mercedes Sprinter',
-        plate: 'AB-1234-CD',
-        capacity: '100 kg',
+        model: "Mercedes Sprinter",
+        plate: "AB-1234-CD",
+        capacity: "100 kg",
         fuelLevel: 75,
-        lastMaintenance: '15 Déc 2024',
-        nextMaintenance: '15 Jan 2025',
+        lastMaintenance: "15 déc. 2024",
+        nextMaintenance: "15 janv. 2025",
     };
 
-    const documents = [
-        { id: '1', name: 'Permis de conduire', status: 'valid', expiry: '15 Juin 2026' },
-        { id: '2', name: 'Carte d\'identité', status: 'valid', expiry: '20 Mars 2027' },
-        { id: '3', name: 'Contrat de travail', status: 'valid', expiry: 'Indéterminé' },
-        { id: '4', name: 'Assurance véhicule', status: 'expiring', expiry: '10 Jan 2025' },
+    const documents: Document[] = [
+        { id: "1", name: "Permis de conduire", status: "valid", expiry: "15 juin 2026" },
+        { id: "2", name: "Carte d'identité", status: "valid", expiry: "20 mars 2027" },
+        { id: "3", name: "Contrat de travail", status: "valid", expiry: "Indéterminé" },
+        { id: "4", name: "Assurance véhicule", status: "expiring", expiry: "10 janv. 2025" },
     ];
 
     const weekSchedule = [
-        { day: 'Lun', date: '23', isToday: false, hasRoute: true },
-        { day: 'Mar', date: '24', isToday: false, hasRoute: true },
-        { day: 'Mer', date: '25', isToday: false, hasRoute: true },
-        { day: 'Jeu', date: '26', isToday: true, hasRoute: true },
-        { day: 'Ven', date: '27', isToday: false, hasRoute: true },
-        { day: 'Sam', date: '28', isToday: false, hasRoute: false },
-        { day: 'Dim', date: '29', isToday: false, hasRoute: false },
+        { day: "L", date: "23", isToday: false, hasRoute: true },
+        { day: "M", date: "24", isToday: false, hasRoute: true },
+        { day: "M", date: "25", isToday: false, hasRoute: true },
+        { day: "J", date: "26", isToday: true, hasRoute: true },
+        { day: "V", date: "27", isToday: false, hasRoute: true },
+        { day: "S", date: "28", isToday: false, hasRoute: false },
+        { day: "D", date: "29", isToday: false, hasRoute: false },
     ];
 
-    const handleViewDocument = (docName: string) => {
-        Alert.alert('Document', `Visualisation de ${docName}`);
-    };
+    const initials =
+        (user?.name ?? "")
+            .split(" ")
+            .map((w) => w.charAt(0))
+            .filter(Boolean)
+            .slice(0, 2)
+            .join("")
+            .toUpperCase() || "CH";
+
+    const handleViewDocument = (name: string) =>
+        Alert.alert("Document", `Visualisation de ${name}`);
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity
-                    onPress={() => setDrawerVisible(true)}
-                    style={styles.iconButton}
-                >
-                    <Text style={styles.menuIcon}>☰</Text>
-                </TouchableOpacity>
-                <ThemedText variate="headline" color="textPrimary">
-                    Mon Profil
-                </ThemedText>
-                <TouchableOpacity style={styles.iconButton}>
-                    <Text style={styles.iconText}>⚙️</Text>
-                </TouchableOpacity>
+        <SafeAreaView
+            edges={["top"]}
+            style={[styles.container, { backgroundColor: colors.paper2 }]}
+        >
+            <View
+                style={[
+                    styles.header,
+                    { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
+                ]}
+            >
+                <Pressable onPress={() => setDrawerVisible(true)} hitSlop={8}>
+                    <Icon name="list" size={20} color={colors.ink800} />
+                </Pressable>
+                <ThemedText variate="title">Profil</ThemedText>
+                <Pressable hitSlop={8}>
+                    <Icon name="settings" size={18} color={colors.ink800} />
+                </Pressable>
             </View>
 
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
-                {/* Profile Card */}
-                <Card style={[styles.profileCard, { backgroundColor: colors.driverPrimary + '10' }]}>
-                    <View style={styles.profileHeader}>
-                        <View style={[styles.avatar, { backgroundColor: colors.driverPrimary }]}>
-                            <Text style={styles.avatarText}>
-                                {user?.name?.charAt(0).toUpperCase() || 'C'}
+            <ScrollView
+                contentContainerStyle={styles.content}
+                showsVerticalScrollIndicator={false}
+            >
+                {/* Identity hero */}
+                <Card
+                    padding={18}
+                    style={[
+                        styles.identity,
+                        { backgroundColor: colors.brand900, borderColor: colors.brand900 },
+                    ]}
+                >
+                    <View style={styles.identityTop}>
+                        <View
+                            style={[
+                                styles.avatar,
+                                { backgroundColor: colors.baobab600 },
+                            ]}
+                        >
+                            <Text style={[styles.avatarText, { color: colors.paper }]}>
+                                {initials}
                             </Text>
                         </View>
-                        <View style={styles.profileInfo}>
-                            <ThemedText variate="subtitle1" color="textPrimary">
-                                {user?.name || 'Chauffeur'}
-                            </ThemedText>
-                            <ThemedText variate="caption" color="textSecondary">
-                                Chauffeur-Livreur
-                            </ThemedText>
-                            <View style={styles.profileMeta}>
-                                <View style={[styles.statusBadge, { backgroundColor: '#10B98120' }]}>
-                                    <Text style={styles.statusDot}>●</Text>
-                                    <ThemedText variate="caption" style={{ color: colors.driverPrimary }}>
-                                        En service
-                                    </ThemedText>
-                                </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.identityName, { color: colors.paper }]}>
+                                {user?.name ?? "Chauffeur"}
+                            </Text>
+                            <Text style={[styles.identityRole, { color: colors.brand100 }]}>
+                                Chauffeur-livreur
+                            </Text>
+                            <View
+                                style={[
+                                    styles.statusBadge,
+                                    { backgroundColor: colors.baobab600 },
+                                ]}
+                            >
+                                <View
+                                    style={[styles.statusDot, { backgroundColor: colors.paper }]}
+                                />
+                                <Text
+                                    style={[styles.statusText, { color: colors.paper }]}
+                                >
+                                    En service
+                                </Text>
                             </View>
                         </View>
                     </View>
                 </Card>
 
-                {/* Stats Grid */}
+                {/* Stats grid */}
                 <View style={styles.statsGrid}>
-                    <Card style={styles.statCard}>
-                        <Text style={styles.statIcon}>📦</Text>
-                        <ThemedText variate="subtitle1" color="textPrimary">
-                            {driverStats.deliveriesThisMonth}
-                        </ThemedText>
-                        <ThemedText variate="caption" color="textSecondary">
-                            Livraisons ce mois
-                        </ThemedText>
-                    </Card>
-
-                    <Card style={styles.statCard}>
-                        <Text style={styles.statIcon}>⏱️</Text>
-                        <ThemedText variate="subtitle1" color="textPrimary">
-                            {driverStats.onTimeRate}%
-                        </ThemedText>
-                        <ThemedText variate="caption" color="textSecondary">
-                            Ponctualité
-                        </ThemedText>
-                    </Card>
-
-                    <Card style={styles.statCard}>
-                        <Text style={styles.statIcon}>⭐</Text>
-                        <ThemedText variate="subtitle1" color="textPrimary">
-                            {driverStats.customerSatisfaction}/5
-                        </ThemedText>
-                        <ThemedText variate="caption" color="textSecondary">
-                            Satisfaction
-                        </ThemedText>
-                    </Card>
-
-                    <Card style={styles.statCard}>
-                        <Text style={styles.statIcon}>🚗</Text>
-                        <ThemedText variate="subtitle1" color="textPrimary">
-                            {driverStats.totalDistance} km
-                        </ThemedText>
-                        <ThemedText variate="caption" color="textSecondary">
-                            Distance totale
-                        </ThemedText>
-                    </Card>
+                    <StatTile
+                        icon="package"
+                        value={`${driverStats.deliveriesThisMonth}`}
+                        label="Livraisons / mois"
+                    />
+                    <StatTile
+                        icon="clock"
+                        value={`${driverStats.onTimeRate}%`}
+                        label="Ponctualité"
+                    />
+                    <StatTile
+                        icon="spark"
+                        value={`${driverStats.customerSatisfaction}/5`}
+                        label="Satisfaction"
+                    />
+                    <StatTile
+                        icon="route"
+                        value={`${driverStats.totalDistance} km`}
+                        label="Distance totale"
+                    />
                 </View>
 
-                {/* Assigned Vehicle */}
-                <Card style={styles.vehicleCard}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionIcon}>🚚</Text>
-                        <ThemedText variate="subtitle2" color="textPrimary">
-                            Véhicule assigné
-                        </ThemedText>
-                    </View>
-
-                    <View style={styles.vehicleInfo}>
-                        <View style={styles.vehicleRow}>
-                            <ThemedText variate="body3" color="textSecondary" style={{ flex: 1 }}>
-                                Modèle
-                            </ThemedText>
-                            <ThemedText variate="body3" color="textPrimary">
+                {/* Vehicle */}
+                <ThemedText variate="caps" color="ink500" style={styles.groupLabel}>
+                    Véhicule assigné
+                </ThemedText>
+                <Card padding={16} style={styles.vehicleCard}>
+                    <View style={styles.vehicleTop}>
+                        <View
+                            style={[
+                                styles.vehicleIcon,
+                                { backgroundColor: colors.paper2 },
+                            ]}
+                        >
+                            <Icon name="truck" size={18} color={colors.brand800} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text
+                                style={[styles.vehicleModel, { color: colors.ink900 }]}
+                            >
                                 {assignedVehicle.model}
-                            </ThemedText>
-                        </View>
-                        <View style={styles.vehicleRow}>
-                            <ThemedText variate="body3" color="textSecondary" style={{ flex: 1 }}>
-                                Immatriculation
-                            </ThemedText>
-                            <ThemedText variate="body3" color="textPrimary">
-                                {assignedVehicle.plate}
-                            </ThemedText>
-                        </View>
-                        <View style={styles.vehicleRow}>
-                            <ThemedText variate="body3" color="textSecondary" style={{ flex: 1 }}>
-                                Capacité
-                            </ThemedText>
-                            <ThemedText variate="body3" color="textPrimary">
-                                {assignedVehicle.capacity}
-                            </ThemedText>
+                            </Text>
+                            <Text
+                                style={[styles.vehiclePlate, { color: colors.ink500 }]}
+                            >
+                                {assignedVehicle.plate} · {assignedVehicle.capacity}
+                            </Text>
                         </View>
                     </View>
 
-                    <View style={styles.fuelContainer}>
+                    <View
+                        style={[styles.fuelRow, { borderTopColor: colors.ink200 }]}
+                    >
                         <View style={styles.fuelHeader}>
-                            <ThemedText variate="caption" color="textSecondary">
-                                Niveau de carburant
-                            </ThemedText>
-                            <ThemedText variate="caption" style={{ color: colors.driverPrimary }}>
-                                {assignedVehicle.fuelLevel}%
-                            </ThemedText>
+                            <View style={styles.fuelLabelRow}>
+                                <Icon name="droplet" size={12} color={colors.ink500} />
+                                <Text
+                                    style={[styles.fuelLabel, { color: colors.ink500 }]}
+                                >
+                                    Carburant
+                                </Text>
+                            </View>
+                            <Text
+                                style={[styles.fuelValue, { color: colors.ink900 }]}
+                            >
+                                {assignedVehicle.fuelLevel}
+                                <Text
+                                    style={[styles.fuelValueUnit, { color: colors.ink500 }]}
+                                >
+                                    %
+                                </Text>
+                            </Text>
                         </View>
-                        <View style={styles.fuelBar}>
+                        <View
+                            style={[styles.fuelBar, { backgroundColor: colors.ink200 }]}
+                        >
                             <View
                                 style={[
                                     styles.fuelFill,
                                     {
                                         width: `${assignedVehicle.fuelLevel}%`,
-                                        backgroundColor: colors.driverPrimary,
+                                        backgroundColor:
+                                            assignedVehicle.fuelLevel > 30
+                                                ? colors.baobab600
+                                                : colors.warn600,
                                     },
                                 ]}
                             />
                         </View>
                     </View>
 
-                    <View style={styles.maintenanceInfo}>
-                        <View style={styles.maintenanceRow}>
-                            <Text style={styles.maintenanceIcon}>🔧</Text>
-                            <View style={{ flex: 1 }}>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    Dernière révision: {assignedVehicle.lastMaintenance}
-                                </ThemedText>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    Prochaine révision: {assignedVehicle.nextMaintenance}
-                                </ThemedText>
-                            </View>
+                    <View
+                        style={[
+                            styles.maintenanceRow,
+                            { borderTopColor: colors.ink200 },
+                        ]}
+                    >
+                        <Icon name="wrench" size={14} color={colors.ink500} />
+                        <View style={{ flex: 1 }}>
+                            <Text
+                                style={[styles.maintenanceText, { color: colors.ink700 }]}
+                            >
+                                Dernière révision : {assignedVehicle.lastMaintenance}
+                            </Text>
+                            <Text
+                                style={[styles.maintenanceText, { color: colors.ink700 }]}
+                            >
+                                Prochaine : {assignedVehicle.nextMaintenance}
+                            </Text>
                         </View>
                     </View>
                 </Card>
 
-                {/* Week Schedule */}
-                <Card style={styles.scheduleCard}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionIcon}>📅</Text>
-                        <ThemedText variate="subtitle2" color="textPrimary">
-                            Planning de la semaine
-                        </ThemedText>
-                    </View>
-
-                    <View style={styles.weekDays}>
-                        {weekSchedule.map((day) => (
+                {/* Schedule */}
+                <ThemedText variate="caps" color="ink500" style={styles.groupLabel}>
+                    Planning de la semaine
+                </ThemedText>
+                <Card padding={14}>
+                    <View style={styles.weekGrid}>
+                        {weekSchedule.map((d, i) => (
                             <View
-                                key={day.date}
+                                key={i}
                                 style={[
-                                    styles.dayCard,
-                                    day.isToday && { backgroundColor: colors.driverPrimary, borderColor: colors.driverPrimary },
+                                    styles.dayCell,
+                                    d.isToday && {
+                                        backgroundColor: colors.brand800,
+                                        borderColor: colors.brand800,
+                                    },
+                                    !d.isToday && {
+                                        backgroundColor: colors.paper,
+                                        borderColor: colors.ink200,
+                                    },
                                 ]}
                             >
-                                <ThemedText
-                                    variate="caption"
-                                    style={{
-                                        color: day.isToday ? '#FFFFFF' : colors.textSecondary,
-                                        marginBottom: Spacing.xs,
-                                    }}
+                                <Text
+                                    style={[
+                                        styles.dayLetter,
+                                        {
+                                            color: d.isToday ? colors.brand100 : colors.ink500,
+                                        },
+                                    ]}
                                 >
-                                    {day.day}
-                                </ThemedText>
-                                <ThemedText
-                                    variate="subtitle3"
-                                    style={{
-                                        color: day.isToday ? '#FFFFFF' : colors.textPrimary,
-                                        marginBottom: Spacing.xs,
-                                    }}
+                                    {d.day}
+                                </Text>
+                                <Text
+                                    style={[
+                                        styles.dayNumber,
+                                        {
+                                            color: d.isToday ? colors.paper : colors.ink900,
+                                        },
+                                    ]}
                                 >
-                                    {day.date}
-                                </ThemedText>
-                                {day.hasRoute && (
-                                    <Text style={styles.routeIndicator}>
-                                        {day.isToday ? '✓' : '●'}
-                                    </Text>
-                                )}
+                                    {d.date}
+                                </Text>
+                                <View
+                                    style={[
+                                        styles.dayIndicator,
+                                        {
+                                            backgroundColor: d.hasRoute
+                                                ? d.isToday
+                                                    ? colors.paper
+                                                    : colors.baobab600
+                                                : "transparent",
+                                        },
+                                    ]}
+                                />
                             </View>
                         ))}
                     </View>
                 </Card>
 
                 {/* Documents */}
-                <Card style={styles.documentsCard}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionIcon}>📄</Text>
-                        <ThemedText variate="subtitle2" color="textPrimary">
-                            Documents professionnels
-                        </ThemedText>
-                    </View>
-
-                    <View style={styles.documentsList}>
-                        {documents.map((doc) => (
-                            <TouchableOpacity
-                                key={doc.id}
-                                style={styles.documentItem}
-                                onPress={() => handleViewDocument(doc.name)}
-                            >
-                                <View style={{ flex: 1 }}>
-                                    <ThemedText variate="body3" color="textPrimary">
-                                        {doc.name}
-                                    </ThemedText>
-                                    <ThemedText variate="caption" color="textSecondary">
-                                        Expire le: {doc.expiry}
-                                    </ThemedText>
-                                </View>
-                                <View
-                                    style={[
-                                        styles.docStatusBadge,
-                                        {
-                                            backgroundColor:
-                                                doc.status === 'valid'
-                                                    ? '#10B98120'
-                                                    : doc.status === 'expiring'
-                                                    ? '#FFA50020'
-                                                    : '#DC262620',
-                                        },
-                                    ]}
-                                >
-                                    <Text
-                                        style={[
-                                            styles.docStatusText,
-                                            {
-                                                color:
-                                                    doc.status === 'valid'
-                                                        ? '#10B981'
-                                                        : doc.status === 'expiring'
-                                                        ? '#FFA500'
-                                                        : '#DC2626',
-                                            },
-                                        ]}
-                                    >
-                                        {doc.status === 'valid' ? '✓ Valide' : doc.status === 'expiring' ? '⚠️ Expire bientôt' : '✗ Expiré'}
-                                    </Text>
-                                </View>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
+                <ThemedText variate="caps" color="ink500" style={styles.groupLabel}>
+                    Documents
+                </ThemedText>
+                <Card padding={0} style={{ overflow: "hidden" }}>
+                    {documents.map((doc, i) => (
+                        <DocumentRow
+                            key={doc.id}
+                            doc={doc}
+                            onPress={() => handleViewDocument(doc.name)}
+                            withDivider={i < documents.length - 1}
+                        />
+                    ))}
                 </Card>
 
-                {/* Quick Actions */}
-                <View style={styles.quickActions}>
-                    <TouchableOpacity style={styles.actionButton}>
-                        <Text style={styles.actionIcon}>📊</Text>
-                        <ThemedText variate="body3" color="textPrimary">
-                            Mes statistiques
-                        </ThemedText>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.actionButton}>
-                        <Text style={styles.actionIcon}>🔔</Text>
-                        <ThemedText variate="body3" color="textPrimary">
-                            Notifications
-                        </ThemedText>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.actionButton}>
-                        <Text style={styles.actionIcon}>❓</Text>
-                        <ThemedText variate="body3" color="textPrimary">
-                            Aide & Support
-                        </ThemedText>
-                    </TouchableOpacity>
+                {/* Quick actions */}
+                <ThemedText variate="caps" color="ink500" style={styles.groupLabel}>
+                    Raccourcis
+                </ThemedText>
+                <View style={{ gap: 10 }}>
+                    <ActionRow icon="chart" label="Mes statistiques" />
+                    <ActionRow icon="bell" label="Notifications" />
+                    <ActionRow icon="msg" label="Aide & support" />
                 </View>
             </ScrollView>
 
-            <DrawerMenu visible={drawerVisible} onClose={() => setDrawerVisible(false)} />
+            <DrawerMenu
+                visible={drawerVisible}
+                onClose={() => setDrawerVisible(false)}
+            />
         </SafeAreaView>
     );
 }
 
+/* ---------- sous-composants ---------- */
+
+function StatTile({
+    icon,
+    value,
+    label,
+}: {
+    icon: IconName;
+    value: string;
+    label: string;
+}) {
+    const colors = useThemeColors();
+    return (
+        <View
+            style={[
+                styles.statTile,
+                { backgroundColor: colors.paper, borderColor: colors.ink200 },
+            ]}
+        >
+            <View
+                style={[styles.statIcon, { backgroundColor: colors.paper2 }]}
+            >
+                <Icon name={icon} size={13} color={colors.brand800} />
+            </View>
+            <Text style={[styles.statValue, { color: colors.ink900 }]}>
+                {value}
+            </Text>
+            <Text style={[styles.statLabel, { color: colors.ink500 }]}>
+                {label}
+            </Text>
+        </View>
+    );
+}
+
+function DocumentRow({
+    doc,
+    onPress,
+    withDivider,
+}: {
+    doc: Document;
+    onPress: () => void;
+    withDivider: boolean;
+}) {
+    const colors = useThemeColors();
+
+    const [bg, fg]: [string, string] =
+        doc.status === "valid"
+            ? [colors.ok100, colors.ok700]
+            : doc.status === "expiring"
+              ? [colors.warn100, colors.warn700]
+              : [colors.danger100, colors.danger600];
+
+    const statusLabel =
+        doc.status === "valid"
+            ? "Valide"
+            : doc.status === "expiring"
+              ? "Expire bientôt"
+              : "Expiré";
+
+    return (
+        <Pressable
+            onPress={onPress}
+            style={[
+                styles.docRow,
+                withDivider && {
+                    borderBottomColor: colors.ink200,
+                    borderBottomWidth: StyleSheet.hairlineWidth,
+                },
+            ]}
+        >
+            <View
+                style={[styles.docIcon, { backgroundColor: colors.paper2 }]}
+            >
+                <Icon name="receipt" size={13} color={colors.ink600} />
+            </View>
+            <View style={{ flex: 1 }}>
+                <Text style={[styles.docName, { color: colors.ink900 }]}>
+                    {doc.name}
+                </Text>
+                <Text style={[styles.docExpiry, { color: colors.ink500 }]}>
+                    Expire : {doc.expiry}
+                </Text>
+            </View>
+            <View style={[styles.docBadge, { backgroundColor: bg }]}>
+                <Text style={[styles.docBadgeText, { color: fg }]}>
+                    {statusLabel}
+                </Text>
+            </View>
+        </Pressable>
+    );
+}
+
+function ActionRow({ icon, label }: { icon: IconName; label: string }) {
+    const colors = useThemeColors();
+    return (
+        <Pressable
+            style={[
+                styles.actionRow,
+                { backgroundColor: colors.paper, borderColor: colors.ink200 },
+            ]}
+        >
+            <View
+                style={[styles.actionIcon, { backgroundColor: colors.paper2 }]}
+            >
+                <Icon name={icon} size={14} color={colors.ink700} />
+            </View>
+            <Text style={[styles.actionLabel, { color: colors.ink900 }]}>
+                {label}
+            </Text>
+            <Icon name="chevRight" size={14} color={colors.ink400} />
+        </Pressable>
+    );
+}
+
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
+    container: { flex: 1 },
     header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: Spacing.padding.screen,
-        paddingTop: Spacing.sm,
-        paddingBottom: Spacing.md,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
     },
-    iconButton: {
-        width: 40,
-        height: 40,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    menuIcon: {
-        fontSize: 28,
-        color: '#374151',
-    },
-    iconText: {
-        fontSize: 24,
-    },
-    content: {
-        padding: Spacing.padding.screen,
-        paddingBottom: Spacing.xxxl,
-    },
-    profileCard: {
-        marginBottom: Spacing.lg,
-    },
-    profileHeader: {
-        flexDirection: 'row',
-        gap: Spacing.md,
-    },
+    content: { padding: 16, paddingBottom: 120 },
+
+    // Identity
+    identity: { marginBottom: 14 },
+    identityTop: { flexDirection: "row", alignItems: "center", gap: 14 },
     avatar: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        justifyContent: 'center',
-        alignItems: 'center',
+        width: 56,
+        height: 56,
+        borderRadius: 14,
+        alignItems: "center",
+        justifyContent: "center",
     },
     avatarText: {
-        color: '#FFFFFF',
-        fontSize: 32,
-        fontWeight: Typography.fontWeight.bold,
-    },
-    profileInfo: {
-        flex: 1,
-        justifyContent: 'center',
-    },
-    profileMeta: {
-        marginTop: Spacing.sm,
-    },
-    statusBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.xs,
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: 4,
-        borderRadius: Spacing.borderRadius.full,
-        alignSelf: 'flex-start',
-    },
-    statusDot: {
-        fontSize: 10,
-        color: '#10B981',
-    },
-    statsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: Spacing.md,
-        marginBottom: Spacing.lg,
-    },
-    statCard: {
-        width: '47%',
-        alignItems: 'center',
-        padding: Spacing.md,
-    },
-    statIcon: {
-        fontSize: 32,
-        marginBottom: Spacing.xs,
-    },
-    vehicleCard: {
-        marginBottom: Spacing.lg,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-        marginBottom: Spacing.md,
-    },
-    sectionIcon: {
-        fontSize: 24,
-    },
-    vehicleInfo: {
-        gap: Spacing.sm,
-        marginBottom: Spacing.md,
-    },
-    vehicleRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        paddingVertical: Spacing.xs,
-    },
-    fuelContainer: {
-        marginTop: Spacing.md,
-        padding: Spacing.md,
-        backgroundColor: '#F9FAFB',
-        borderRadius: Spacing.borderRadius.md,
-    },
-    fuelHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: Spacing.xs,
-    },
-    fuelBar: {
-        height: 8,
-        backgroundColor: '#E5E7EB',
-        borderRadius: 4,
-        overflow: 'hidden',
-    },
-    fuelFill: {
-        height: '100%',
-        borderRadius: 4,
-    },
-    maintenanceInfo: {
-        marginTop: Spacing.md,
-    },
-    maintenanceRow: {
-        flexDirection: 'row',
-        gap: Spacing.sm,
-    },
-    maintenanceIcon: {
+        fontFamily: FontFamily.uiSemibold,
         fontSize: 20,
     },
-    scheduleCard: {
-        marginBottom: Spacing.lg,
+    identityName: {
+        fontFamily: FontFamily.serifMedium,
+        fontSize: 20,
+        letterSpacing: -0.3,
     },
-    weekDays: {
-        flexDirection: 'row',
-        gap: Spacing.xs,
+    identityRole: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 3,
     },
-    dayCard: {
-        flex: 1,
-        alignItems: 'center',
-        padding: Spacing.sm,
-        borderRadius: Spacing.borderRadius.md,
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        backgroundColor: '#F9FAFB',
-    },
-    routeIndicator: {
-        fontSize: 10,
-        color: '#10B981',
-    },
-    documentsCard: {
-        marginBottom: Spacing.lg,
-    },
-    documentsList: {
-        gap: Spacing.md,
-    },
-    documentItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.md,
-        paddingVertical: Spacing.sm,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
-    },
-    docStatusBadge: {
-        paddingHorizontal: Spacing.sm,
+    statusBadge: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 5,
+        paddingHorizontal: 8,
         paddingVertical: 4,
-        borderRadius: Spacing.borderRadius.sm,
+        borderRadius: 999,
+        alignSelf: "flex-start",
+        marginTop: 8,
     },
-    docStatusText: {
-        fontSize: Typography.fontSize.xs,
-        fontWeight: Typography.fontWeight.semibold,
+    statusDot: { width: 5, height: 5, borderRadius: 3 },
+    statusText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.micro,
     },
-    quickActions: {
-        gap: Spacing.md,
+
+    // Stats
+    statsGrid: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        gap: 10,
+        marginBottom: 4,
     },
-    actionButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.md,
-        backgroundColor: '#FFFFFF',
-        padding: Spacing.md,
-        borderRadius: Spacing.borderRadius.lg,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 2,
+    statTile: {
+        width: "47%",
+        flexGrow: 1,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderRadius: 12,
+        padding: 14,
+    },
+    statIcon: {
+        width: 28,
+        height: 28,
+        borderRadius: 8,
+        alignItems: "center",
+        justifyContent: "center",
+        marginBottom: 10,
+    },
+    statValue: {
+        fontFamily: FontFamily.serifMedium,
+        fontSize: 20,
+        letterSpacing: -0.3,
+    },
+    statLabel: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
+        marginTop: 2,
+    },
+
+    // Groups
+    groupLabel: { marginTop: 18, marginBottom: 8, paddingLeft: 4 },
+
+    // Vehicle
+    vehicleCard: {},
+    vehicleTop: { flexDirection: "row", alignItems: "center", gap: 12 },
+    vehicleIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 10,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    vehicleModel: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.md,
+    },
+    vehiclePlate: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 2,
+    },
+    fuelRow: {
+        marginTop: 14,
+        paddingTop: 12,
+        borderTopWidth: StyleSheet.hairlineWidth,
+    },
+    fuelHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 8,
+    },
+    fuelLabelRow: { flexDirection: "row", alignItems: "center", gap: 5 },
+    fuelLabel: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.tiny,
+    },
+    fuelValue: {
+        fontFamily: FontFamily.monoMedium,
+        fontSize: Typography.fontSize.md,
+    },
+    fuelValueUnit: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.tiny,
+    },
+    fuelBar: { height: 6, borderRadius: 3, overflow: "hidden" },
+    fuelFill: { height: "100%", borderRadius: 3 },
+    maintenanceRow: {
+        marginTop: 12,
+        paddingTop: 12,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        flexDirection: "row",
+        alignItems: "flex-start",
+        gap: 10,
+    },
+    maintenanceText: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        lineHeight: Typography.fontSize.tiny * 1.5,
+    },
+
+    // Week schedule
+    weekGrid: { flexDirection: "row", gap: 6 },
+    dayCell: {
+        flex: 1,
+        alignItems: "center",
+        paddingVertical: 10,
+        borderRadius: 10,
+        borderWidth: StyleSheet.hairlineWidth,
+    },
+    dayLetter: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.micro,
+        letterSpacing: 0.5,
+        textTransform: "uppercase",
+    },
+    dayNumber: {
+        fontFamily: FontFamily.serifMedium,
+        fontSize: 16,
+        marginTop: 2,
+    },
+    dayIndicator: {
+        width: 4,
+        height: 4,
+        borderRadius: 2,
+        marginTop: 5,
+    },
+
+    // Documents
+    docRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+    },
+    docIcon: {
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    docName: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.sm,
+    },
+    docExpiry: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 1,
+    },
+    docBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 999,
+    },
+    docBadgeText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.micro,
+    },
+
+    // Action rows
+    actionRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderRadius: 12,
     },
     actionIcon: {
-        fontSize: 24,
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    actionLabel: {
+        flex: 1,
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.sm,
     },
 });
