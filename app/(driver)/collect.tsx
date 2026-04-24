@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
     Alert,
     Pressable,
@@ -9,13 +9,16 @@ import {
     View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import Card from "@/components/ui/Card";
 import Icon, { IconName } from "@/components/ui/Icon";
 import ThemedText from "@/components/ui/ThemedText";
 import { FontFamily, Typography } from "@/constants/Typography";
 import { useThemeColors } from "@/hooks/useThemeColors";
+
+const SCAN_RESULT_KEY = "@driver_last_scan";
 
 type StepId = "qr" | "qty" | "photos" | "signature";
 
@@ -27,8 +30,31 @@ export default function CollectScreen() {
     const [sacs, setSacs] = useState("");
     const [notes, setNotes] = useState("");
     const [qrScanned, setQrScanned] = useState(false);
+    const [scannedCode, setScannedCode] = useState<string | null>(null);
     const [photosAdded, setPhotosAdded] = useState(0);
     const [signed, setSigned] = useState(false);
+
+    // Read scan result on focus (set by /(driver)/scan screen)
+    useFocusEffect(
+        useCallback(() => {
+            let cancelled = false;
+            (async () => {
+                try {
+                    const raw = await AsyncStorage.getItem(SCAN_RESULT_KEY);
+                    if (!raw || cancelled) return;
+                    const parsed = JSON.parse(raw) as { code: string };
+                    setQrScanned(true);
+                    setScannedCode(parsed.code);
+                    await AsyncStorage.removeItem(SCAN_RESULT_KEY);
+                } catch (err) {
+                    console.error(err);
+                }
+            })();
+            return () => {
+                cancelled = true;
+            };
+        }, []),
+    );
 
     const currentClient = {
         nom: "King Fahd Palace",
@@ -47,8 +73,7 @@ export default function CollectScreen() {
     ).length;
 
     const handleScanQR = () => {
-        setQrScanned(true);
-        Alert.alert("QR Code scanné", "Client vérifié avec succès");
+        router.push("/(driver)/scan");
     };
 
     const handleAddPhoto = () => {
@@ -184,7 +209,13 @@ export default function CollectScreen() {
                             </Text>
                         </Pressable>
                     ) : (
-                        <SuccessRow label="QR code vérifié" />
+                        <SuccessRow
+                            label={
+                                scannedCode
+                                    ? `QR code vérifié · ${scannedCode}`
+                                    : "QR code vérifié"
+                            }
+                        />
                     )}
                 </StepCard>
 

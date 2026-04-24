@@ -32,7 +32,13 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Autorise Blanchisserie SN à accéder à ta caméra pour scanner les QR codes clients."
+        }
+      ]
     ],
     "extra": {
       "router": {},
