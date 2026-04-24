@@ -1,628 +1,746 @@
-import React, { useState } from 'react';
+import { Fragment, useState } from "react";
 import {
-    View,
-    Text,
-    StyleSheet,
-    ScrollView,
-    TouchableOpacity,
-    TextInput,
     Alert,
-    SafeAreaView,
-} from 'react-native';
-import { useThemeColors } from '@/hooks/useThemeColors';
-import Card from '@/components/ui/Card';
-import ThemedText from '@/components/ui/ThemedText';
-import Button from '@/components/ui/Button';
-import Input from '@/components/ui/Input';
-import { Spacing } from '@/constants/Spacing';
-import { Typography } from '@/constants/Typography';
+    KeyboardAvoidingView,
+    Linking,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 
-// Mock tickets data
+import Card from "@/components/ui/Card";
+import Icon, { IconName } from "@/components/ui/Icon";
+import StatusBadge, { OrderStatus as UIStatus } from "@/components/ui/StatusBadge";
+import ThemedText from "@/components/ui/ThemedText";
+import { FontFamily, Typography } from "@/constants/Typography";
+import { useThemeColors } from "@/hooks/useThemeColors";
+
+type TicketStatus = "open" | "in_progress" | "resolved" | "closed";
+type Priority = "low" | "medium" | "high";
+type CategoryId = "complaint" | "billing" | "delivery" | "quality" | "other";
+
 const MOCK_TICKETS = [
     {
-        id: '1',
-        subject: 'Linge endommagé',
-        category: 'complaint',
-        status: 'open',
-        priority: 'high',
-        createdAt: '2024-01-22T10:30:00Z',
-        lastUpdate: '2024-01-22T14:20:00Z',
+        id: "1",
+        subject: "Linge endommagé · TRG-2304-002",
+        category: "complaint" as CategoryId,
+        status: "open" as TicketStatus,
+        priority: "high" as Priority,
+        createdAt: "2026-04-22T10:30:00Z",
+        lastUpdate: "2026-04-23T14:20:00Z",
         messages: 3,
     },
     {
-        id: '2',
-        subject: 'Question sur la facture INV-2024-002',
-        category: 'billing',
-        status: 'in_progress',
-        priority: 'medium',
-        createdAt: '2024-01-20T15:00:00Z',
-        lastUpdate: '2024-01-21T09:15:00Z',
+        id: "2",
+        subject: "Question sur la facture FAC-2504-012",
+        category: "billing" as CategoryId,
+        status: "in_progress" as TicketStatus,
+        priority: "medium" as Priority,
+        createdAt: "2026-04-19T15:00:00Z",
+        lastUpdate: "2026-04-21T09:15:00Z",
         messages: 5,
     },
     {
-        id: '3',
-        subject: 'Retard de livraison',
-        category: 'delivery',
-        status: 'resolved',
-        priority: 'low',
-        createdAt: '2024-01-18T08:45:00Z',
-        lastUpdate: '2024-01-19T16:30:00Z',
+        id: "3",
+        subject: "Retard de livraison",
+        category: "delivery" as CategoryId,
+        status: "resolved" as TicketStatus,
+        priority: "low" as Priority,
+        createdAt: "2026-04-14T08:45:00Z",
+        lastUpdate: "2026-04-15T16:30:00Z",
         messages: 7,
     },
 ];
 
-const TICKET_CATEGORIES = [
-    { id: 'complaint', label: 'Réclamation', icon: '⚠️' },
-    { id: 'billing', label: 'Facturation', icon: '💰' },
-    { id: 'delivery', label: 'Livraison', icon: '🚚' },
-    { id: 'quality', label: 'Qualité', icon: '✨' },
-    { id: 'other', label: 'Autre', icon: '💬' },
+const CATEGORIES: { id: CategoryId; label: string; icon: IconName }[] = [
+    { id: "complaint", label: "Réclamation", icon: "alert" },
+    { id: "billing", label: "Facturation", icon: "receipt" },
+    { id: "delivery", label: "Livraison", icon: "truck" },
+    { id: "quality", label: "Qualité", icon: "spark" },
+    { id: "other", label: "Autre", icon: "msg" },
 ];
 
-const STATUS_COLORS = {
-    open: '#FFA500',
-    in_progress: '#1E90FF',
-    resolved: '#228B22',
-    closed: '#6B7280',
-};
-
-const STATUS_LABELS = {
-    open: 'Ouvert',
-    in_progress: 'En cours',
-    resolved: 'Résolu',
-    closed: 'Fermé',
-};
-
-const PRIORITY_COLORS = {
-    low: '#10B981',
-    medium: '#F59E0B',
-    high: '#EF4444',
+const STATUS_TO_UI: Record<TicketStatus, UIStatus> = {
+    open: "En attente",
+    in_progress: "Traitement",
+    resolved: "Validée",
+    closed: "Annulée",
 };
 
 const FAQ_ITEMS = [
     {
-        question: 'Quels sont les délais de traitement?',
-        answer: 'Le délai standard est de 48h pour le lavage et pliage, 72h pour le nettoyage à sec.',
+        q: "Quels sont les délais de traitement ?",
+        a: "Le délai standard est de 48 h pour le lavage et pliage, 72 h pour le nettoyage à sec.",
     },
     {
-        question: 'Comment suivre ma commande?',
-        answer: 'Rendez-vous dans "Mes Commandes" pour voir le statut en temps réel de vos commandes.',
+        q: "Comment suivre ma commande ?",
+        a: "Depuis « Mes commandes », ouvrez une commande pour voir la timeline de production en temps réel.",
     },
     {
-        question: 'Que faire en cas de linge endommagé?',
-        answer: 'Créez immédiatement un ticket de réclamation avec photos. Nous traiterons votre demande sous 24h.',
+        q: "Que faire en cas de linge endommagé ?",
+        a: "Créez un ticket « Réclamation » avec photos. Nous traitons votre demande sous 24 h.",
     },
     {
-        question: 'Comment modifier mon planning de collecte?',
-        answer: 'Contactez-nous par téléphone ou créez un ticket. Les modifications nécessitent un préavis de 48h.',
+        q: "Comment modifier mon planning de collecte ?",
+        a: "Contactez-nous par téléphone ou créez un ticket. Les modifications demandent un préavis de 48 h.",
     },
 ];
 
+type Tab = "tickets" | "new" | "faq";
+
 export default function SupportScreen() {
+    const router = useRouter();
     const colors = useThemeColors();
-    const [activeTab, setActiveTab] = useState<'tickets' | 'new' | 'faq'>('tickets');
-    const [expandedFAQ, setExpandedFAQ] = useState<number | null>(null);
+
+    const [tab, setTab] = useState<Tab>("tickets");
+    const [expanded, setExpanded] = useState<number | null>(0);
 
     // New ticket form
-    const [subject, setSubject] = useState('');
-    const [category, setCategory] = useState('');
-    const [description, setDescription] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [subject, setSubject] = useState("");
+    const [category, setCategory] = useState<CategoryId | null>(null);
+    const [description, setDescription] = useState("");
+    const [submitting, setSubmitting] = useState(false);
 
-    const handleSubmitTicket = () => {
+    const handleSubmit = () => {
         if (!subject || !category || !description) {
-            Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+            Alert.alert("Erreur", "Remplissez tous les champs du ticket.");
             return;
         }
-
-        setLoading(true);
-        // Simulate API call
+        setSubmitting(true);
         setTimeout(() => {
-            setLoading(false);
-            Alert.alert(
-                'Ticket créé',
-                'Votre demande a été enregistrée. Nous vous répondrons dans les plus brefs délais.',
-                [
-                    {
-                        text: 'OK',
-                        onPress: () => {
-                            setSubject('');
-                            setCategory('');
-                            setDescription('');
-                            setActiveTab('tickets');
-                        },
+            setSubmitting(false);
+            Alert.alert("Ticket créé", "Nous revenons vers vous rapidement.", [
+                {
+                    text: "OK",
+                    onPress: () => {
+                        setSubject("");
+                        setCategory(null);
+                        setDescription("");
+                        setTab("tickets");
                     },
-                ]
-            );
-        }, 1000);
+                },
+            ]);
+        }, 600);
     };
 
-    const renderTicketsList = () => (
-        <View>
-            {MOCK_TICKETS.map(ticket => (
-                <TouchableOpacity
-                    key={ticket.id}
-                    onPress={() => {
-                        // TODO: Navigate to ticket details
-                    }}
-                >
-                    <Card style={styles.ticketCard}>
-                        <View style={styles.ticketHeader}>
-                            <View style={{ flex: 1 }}>
-                                <ThemedText variate="subtitle2" color="textPrimary">
-                                    {ticket.subject}
-                                </ThemedText>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    #{ticket.id} • {new Date(ticket.createdAt).toLocaleDateString('fr-FR')}
-                                </ThemedText>
-                            </View>
-                            <View
-                                style={[
-                                    styles.priorityBadge,
-                                    { backgroundColor: PRIORITY_COLORS[ticket.priority] },
-                                ]}
-                            />
-                        </View>
-
-                        <View style={styles.ticketMeta}>
-                            <View
-                                style={[
-                                    styles.statusBadge,
-                                    { backgroundColor: STATUS_COLORS[ticket.status] + '20' },
-                                ]}
-                            >
-                                <Text style={[styles.statusText, { color: STATUS_COLORS[ticket.status] }]}>
-                                    {STATUS_LABELS[ticket.status]}
-                                </Text>
-                            </View>
-                            <View style={styles.messagesCount}>
-                                <Text style={styles.messageIcon}>💬</Text>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    {ticket.messages} messages
-                                </ThemedText>
-                            </View>
-                        </View>
-
-                        <ThemedText variate="caption" color="textSecondary">
-                            Dernière mise à jour: {new Date(ticket.lastUpdate).toLocaleDateString('fr-FR')}
-                        </ThemedText>
-                    </Card>
-                </TouchableOpacity>
-            ))}
-
-            {MOCK_TICKETS.length === 0 && (
-                <View style={styles.emptyContainer}>
-                    <Text style={styles.emptyIcon}>📭</Text>
-                    <ThemedText variate="subtitle2" color="textSecondary">
-                        Aucun ticket
-                    </ThemedText>
-                    <ThemedText variate="body3" color="textSecondary">
-                        Vous n'avez aucun ticket en cours
-                    </ThemedText>
-                </View>
-            )}
-        </View>
-    );
-
-    const renderNewTicket = () => (
-        <View>
-            <Card>
-                <ThemedText variate="subtitle1" color="textPrimary" style={styles.sectionTitle}>
-                    Créer un ticket
-                </ThemedText>
-
-                <Input
-                    label="Sujet"
-                    placeholder="Ex: Problème avec ma commande"
-                    value={subject}
-                    onChangeText={setSubject}
-                    leftIcon={<Text>📝</Text>}
-                />
-
-                <View style={{ marginBottom: Spacing.md }}>
-                    <ThemedText variate="body3" color="textSecondary" style={{ marginBottom: Spacing.sm }}>
-                        Catégorie
-                    </ThemedText>
-                    <View style={styles.categoriesGrid}>
-                        {TICKET_CATEGORIES.map(cat => (
-                            <TouchableOpacity
-                                key={cat.id}
-                                style={[
-                                    styles.categoryCard,
-                                    {
-                                        backgroundColor: category === cat.id
-                                            ? colors.hotelPrimary + '20'
-                                            : colors.surface,
-                                        borderColor: category === cat.id
-                                            ? colors.hotelPrimary
-                                            : colors.border,
-                                    },
-                                ]}
-                                onPress={() => setCategory(cat.id)}
-                            >
-                                <Text style={styles.categoryIcon}>{cat.icon}</Text>
-                                <ThemedText
-                                    variate="caption"
-                                    color="textPrimary"
-                                    style={styles.categoryLabel}
-                                >
-                                    {cat.label}
-                                </ThemedText>
-                                {category === cat.id && (
-                                    <View style={[styles.checkmark, { backgroundColor: colors.hotelPrimary }]}>
-                                        <Text style={styles.checkmarkIcon}>✓</Text>
-                                    </View>
-                                )}
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                </View>
-
-                <View style={{ marginBottom: Spacing.md }}>
-                    <ThemedText variate="body3" color="textSecondary" style={{ marginBottom: Spacing.sm }}>
-                        Description
-                    </ThemedText>
-                    <TextInput
-                        style={[
-                            styles.textArea,
-                            {
-                                backgroundColor: colors.surface,
-                                borderColor: colors.border,
-                                color: colors.textPrimary,
-                            },
-                        ]}
-                        placeholder="Décrivez votre demande en détail..."
-                        placeholderTextColor={colors.textSecondary}
-                        value={description}
-                        onChangeText={setDescription}
-                        multiline
-                        numberOfLines={6}
-                        textAlignVertical="top"
-                    />
-                </View>
-
-                <Button
-                    title="Envoyer"
-                    onPress={handleSubmitTicket}
-                    loading={loading}
-                />
-            </Card>
-
-            <Card style={{ backgroundColor: '#F3F4F6', marginTop: Spacing.md }}>
-                <ThemedText variate="subtitle2" color="textPrimary" style={styles.sectionTitle}>
-                    Contact direct
-                </ThemedText>
-                <TouchableOpacity style={styles.contactOption}>
-                    <Text style={styles.contactIcon}>📞</Text>
-                    <View>
-                        <ThemedText variate="body2" color="textPrimary">
-                            Téléphone
-                        </ThemedText>
-                        <ThemedText variate="caption" color="textSecondary">
-                            +221 33 123 45 67
-                        </ThemedText>
-                    </View>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.contactOption}>
-                    <Text style={styles.contactIcon}>✉️</Text>
-                    <View>
-                        <ThemedText variate="body2" color="textPrimary">
-                            Email
-                        </ThemedText>
-                        <ThemedText variate="caption" color="textSecondary">
-                            support@laundryking.sn
-                        </ThemedText>
-                    </View>
-                </TouchableOpacity>
-            </Card>
-        </View>
-    );
-
-    const renderFAQ = () => (
-        <View>
-            <Card>
-                <ThemedText variate="subtitle1" color="textPrimary" style={styles.sectionTitle}>
-                    Questions fréquentes
-                </ThemedText>
-                {FAQ_ITEMS.map((item, index) => (
-                    <TouchableOpacity
-                        key={index}
-                        style={styles.faqItem}
-                        onPress={() => setExpandedFAQ(expandedFAQ === index ? null : index)}
-                    >
-                        <View style={styles.faqQuestion}>
-                            <Text style={styles.faqIcon}>❓</Text>
-                            <ThemedText variate="body2" color="textPrimary" style={{ flex: 1 }}>
-                                {item.question}
-                            </ThemedText>
-                            <Text style={styles.expandIcon}>
-                                {expandedFAQ === index ? '▼' : '▶'}
-                            </Text>
-                        </View>
-                        {expandedFAQ === index && (
-                            <View style={styles.faqAnswer}>
-                                <ThemedText variate="body3" color="textSecondary">
-                                    {item.answer}
-                                </ThemedText>
-                            </View>
-                        )}
-                    </TouchableOpacity>
-                ))}
-            </Card>
-        </View>
-    );
-
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            {/* Header */}
-            <View style={styles.header}>
-                <ThemedText variate="headline" color="textPrimary">
-                    Support & Aide
-                </ThemedText>
+        <SafeAreaView
+            edges={["top"]}
+            style={[styles.container, { backgroundColor: colors.paper2 }]}
+        >
+            {/* Top bar */}
+            <View
+                style={[
+                    styles.topBar,
+                    { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
+                ]}
+            >
+                <Pressable
+                    onPress={() => router.back()}
+                    style={[styles.iconChip, { backgroundColor: colors.ink100 }]}
+                    hitSlop={6}
+                >
+                    <Icon name="chevLeft" size={16} color={colors.ink800} stroke={2} />
+                </Pressable>
+                <View style={{ flex: 1 }}>
+                    <ThemedText variate="title">Support & aide</ThemedText>
+                    <ThemedText variate="caption" color="ink500" style={{ marginTop: 2 }}>
+                        24 h / 24 · 7 j / 7
+                    </ThemedText>
+                </View>
             </View>
 
-            {/* Tabs */}
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.tabsContainer}
-                contentContainerStyle={styles.tabsContent}
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === "ios" ? "padding" : undefined}
             >
-                <TouchableOpacity
-                    style={[
-                        styles.tab,
-                        {
-                            backgroundColor: activeTab === 'tickets'
-                                ? colors.hotelPrimary
-                                : colors.surface,
-                            borderColor: activeTab === 'tickets'
-                                ? colors.hotelPrimary
-                                : colors.border,
-                        },
-                    ]}
-                    onPress={() => setActiveTab('tickets')}
+                <ScrollView
+                    contentContainerStyle={styles.content}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
                 >
-                    <Text style={styles.tabText}>
-                        {activeTab === 'tickets' ? '🎫' : '🎫'}
-                    </Text>
-                    <Text
-                        style={[
-                            styles.tabLabel,
-                            { color: activeTab === 'tickets' ? '#FFFFFF' : colors.textPrimary },
-                        ]}
-                    >
-                        Mes tickets
-                    </Text>
-                </TouchableOpacity>
+                    {/* Contact hero */}
+                    <View style={styles.heroRow}>
+                        <ContactCTA
+                            icon="phone"
+                            label="Appeler"
+                            sub="+221 33 123 45 67"
+                            bg={colors.brand900}
+                            fg={colors.paper}
+                            accent={colors.brand100}
+                            onPress={() => Linking.openURL("tel:+221331234567")}
+                        />
+                        <ContactCTA
+                            icon="msg"
+                            label="WhatsApp"
+                            sub="+221 77 987 65 43"
+                            bg={colors.baobab100}
+                            fg={colors.baobab700}
+                            accent={colors.baobab700}
+                            onPress={() =>
+                                Linking.openURL("https://wa.me/221779876543")
+                            }
+                        />
+                    </View>
 
-                <TouchableOpacity
-                    style={[
-                        styles.tab,
-                        {
-                            backgroundColor: activeTab === 'new'
-                                ? colors.hotelPrimary
-                                : colors.surface,
-                            borderColor: activeTab === 'new'
-                                ? colors.hotelPrimary
-                                : colors.border,
-                        },
-                    ]}
-                    onPress={() => setActiveTab('new')}
-                >
-                    <Text style={styles.tabText}>➕</Text>
-                    <Text
-                        style={[
-                            styles.tabLabel,
-                            { color: activeTab === 'new' ? '#FFFFFF' : colors.textPrimary },
-                        ]}
-                    >
-                        Nouveau ticket
-                    </Text>
-                </TouchableOpacity>
+                    {/* Tabs */}
+                    <View style={styles.tabsWrap}>
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.tabs}
+                        >
+                            {(
+                                [
+                                    ["tickets", "Mes tickets"],
+                                    ["new", "Nouveau"],
+                                    ["faq", "FAQ"],
+                                ] as [Tab, string][]
+                            ).map(([id, label]) => {
+                                const active = tab === id;
+                                return (
+                                    <Pressable
+                                        key={id}
+                                        onPress={() => setTab(id)}
+                                        style={[
+                                            styles.tab,
+                                            {
+                                                backgroundColor: active
+                                                    ? colors.ink900
+                                                    : colors.paper,
+                                                borderColor: active ? colors.ink900 : colors.ink200,
+                                            },
+                                        ]}
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.tabText,
+                                                {
+                                                    color: active ? colors.paper : colors.ink700,
+                                                },
+                                            ]}
+                                        >
+                                            {label}
+                                        </Text>
+                                    </Pressable>
+                                );
+                            })}
+                        </ScrollView>
+                    </View>
 
-                <TouchableOpacity
-                    style={[
-                        styles.tab,
-                        {
-                            backgroundColor: activeTab === 'faq'
-                                ? colors.hotelPrimary
-                                : colors.surface,
-                            borderColor: activeTab === 'faq'
-                                ? colors.hotelPrimary
-                                : colors.border,
-                        },
-                    ]}
-                    onPress={() => setActiveTab('faq')}
-                >
-                    <Text style={styles.tabText}>❓</Text>
-                    <Text
-                        style={[
-                            styles.tabLabel,
-                            { color: activeTab === 'faq' ? '#FFFFFF' : colors.textPrimary },
-                        ]}
-                    >
-                        FAQ
-                    </Text>
-                </TouchableOpacity>
-            </ScrollView>
-
-            {/* Content */}
-            <ScrollView
-                style={styles.content}
-                contentContainerStyle={styles.contentContainer}
-            >
-                {activeTab === 'tickets' && renderTicketsList()}
-                {activeTab === 'new' && renderNewTicket()}
-                {activeTab === 'faq' && renderFAQ()}
-            </ScrollView>
+                    {/* Content */}
+                    {tab === "tickets" && <TicketsList />}
+                    {tab === "new" && (
+                        <NewTicketForm
+                            subject={subject}
+                            setSubject={setSubject}
+                            category={category}
+                            setCategory={setCategory}
+                            description={description}
+                            setDescription={setDescription}
+                            submitting={submitting}
+                            onSubmit={handleSubmit}
+                        />
+                    )}
+                    {tab === "faq" && (
+                        <FAQ expanded={expanded} setExpanded={setExpanded} />
+                    )}
+                </ScrollView>
+            </KeyboardAvoidingView>
         </SafeAreaView>
     );
 }
 
+function ContactCTA({
+    icon,
+    label,
+    sub,
+    bg,
+    fg,
+    accent,
+    onPress,
+}: {
+    icon: IconName;
+    label: string;
+    sub: string;
+    bg: string;
+    fg: string;
+    accent: string;
+    onPress: () => void;
+}) {
+    return (
+        <Pressable
+            onPress={onPress}
+            style={[styles.contactCTA, { backgroundColor: bg }]}
+        >
+            <View style={styles.contactCTAHead}>
+                <Icon name={icon} size={18} color={fg} stroke={1.8} />
+                <Text style={[styles.contactCTALabel, { color: fg }]}>{label}</Text>
+            </View>
+            <Text style={[styles.contactCTASub, { color: accent }]}>{sub}</Text>
+        </Pressable>
+    );
+}
+
+function TicketsList() {
+    const colors = useThemeColors();
+    return (
+        <View style={{ gap: 8 }}>
+            <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
+                Tickets · {MOCK_TICKETS.length}
+            </ThemedText>
+            {MOCK_TICKETS.map((t) => (
+                <Card key={t.id} padding={14}>
+                    <View style={styles.ticketHead}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.ticketCode, { color: colors.ink500 }]}>
+                                #{t.id} · {formatRelative(t.createdAt)}
+                            </Text>
+                            <Text style={[styles.ticketSubject, { color: colors.ink900 }]}>
+                                {t.subject}
+                            </Text>
+                        </View>
+                        <View
+                            style={[
+                                styles.priorityDot,
+                                { backgroundColor: priorityColor(t.priority, colors) },
+                            ]}
+                        />
+                    </View>
+                    <View style={styles.ticketFoot}>
+                        <StatusBadge status={STATUS_TO_UI[t.status]} />
+                        <View style={styles.ticketMsg}>
+                            <Icon name="msg" size={12} color={colors.ink500} />
+                            <Text style={[styles.ticketMsgText, { color: colors.ink500 }]}>
+                                {t.messages} messages
+                            </Text>
+                        </View>
+                        <Text style={[styles.ticketLastUpdate, { color: colors.ink500 }]}>
+                            · maj {formatRelative(t.lastUpdate)}
+                        </Text>
+                    </View>
+                </Card>
+            ))}
+        </View>
+    );
+}
+
+function NewTicketForm({
+    subject,
+    setSubject,
+    category,
+    setCategory,
+    description,
+    setDescription,
+    submitting,
+    onSubmit,
+}: {
+    subject: string;
+    setSubject: (v: string) => void;
+    category: CategoryId | null;
+    setCategory: (v: CategoryId) => void;
+    description: string;
+    setDescription: (v: string) => void;
+    submitting: boolean;
+    onSubmit: () => void;
+}) {
+    const colors = useThemeColors();
+    return (
+        <View>
+            <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
+                Catégorie
+            </ThemedText>
+            <View style={styles.catGrid}>
+                {CATEGORIES.map((c) => {
+                    const active = category === c.id;
+                    return (
+                        <Pressable
+                            key={c.id}
+                            onPress={() => setCategory(c.id)}
+                            style={[
+                                styles.catCard,
+                                {
+                                    backgroundColor: active ? colors.brand100 : colors.paper,
+                                    borderColor: active ? colors.brand800 : colors.ink200,
+                                },
+                            ]}
+                        >
+                            <View
+                                style={[
+                                    styles.catIcon,
+                                    {
+                                        backgroundColor: active ? colors.brand800 : colors.paper2,
+                                    },
+                                ]}
+                            >
+                                <Icon
+                                    name={c.icon}
+                                    size={14}
+                                    color={active ? colors.paper : colors.ink700}
+                                />
+                            </View>
+                            <Text
+                                style={[
+                                    styles.catLabel,
+                                    {
+                                        color: active ? colors.brand800 : colors.ink800,
+                                    },
+                                ]}
+                            >
+                                {c.label}
+                            </Text>
+                        </Pressable>
+                    );
+                })}
+            </View>
+
+            <ThemedText
+                variate="caps"
+                color="ink500"
+                style={[styles.sectionLabel, { marginTop: 16 }]}
+            >
+                Sujet
+            </ThemedText>
+            <View
+                style={[
+                    styles.inputWrap,
+                    { backgroundColor: colors.paper, borderColor: colors.ink200 },
+                ]}
+            >
+                <TextInput
+                    value={subject}
+                    onChangeText={setSubject}
+                    placeholder="Ex. Problème avec ma commande"
+                    placeholderTextColor={colors.ink400}
+                    style={[styles.input, { color: colors.ink800 }]}
+                />
+            </View>
+
+            <ThemedText
+                variate="caps"
+                color="ink500"
+                style={[styles.sectionLabel, { marginTop: 16 }]}
+            >
+                Description
+            </ThemedText>
+            <View
+                style={[
+                    styles.textareaWrap,
+                    { backgroundColor: colors.paper, borderColor: colors.ink200 },
+                ]}
+            >
+                <TextInput
+                    value={description}
+                    onChangeText={setDescription}
+                    placeholder="Décrivez votre demande en détail…"
+                    placeholderTextColor={colors.ink400}
+                    multiline
+                    style={[styles.textarea, { color: colors.ink800 }]}
+                />
+            </View>
+
+            <Pressable
+                onPress={onSubmit}
+                disabled={submitting}
+                style={[
+                    styles.submit,
+                    {
+                        backgroundColor: colors.brand800,
+                        opacity: submitting ? 0.6 : 1,
+                    },
+                ]}
+            >
+                <Text style={[styles.submitText, { color: colors.paper }]}>
+                    {submitting ? "Envoi…" : "Envoyer le ticket"}
+                </Text>
+                <Icon name="arrowRight" size={16} color={colors.paper} stroke={2} />
+            </Pressable>
+        </View>
+    );
+}
+
+function FAQ({
+    expanded,
+    setExpanded,
+}: {
+    expanded: number | null;
+    setExpanded: (v: number | null) => void;
+}) {
+    const colors = useThemeColors();
+    return (
+        <View>
+            <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
+                Questions fréquentes
+            </ThemedText>
+            <Card padding={0} style={{ overflow: "hidden" }}>
+                {FAQ_ITEMS.map((it, i) => {
+                    const open = expanded === i;
+                    return (
+                        <Fragment key={i}>
+                            <Pressable
+                                onPress={() => setExpanded(open ? null : i)}
+                                style={styles.faqHeader}
+                            >
+                                <Text style={[styles.faqQ, { color: colors.ink900 }]}>
+                                    {it.q}
+                                </Text>
+                                <Icon
+                                    name={open ? "chevDown" : "chevRight"}
+                                    size={14}
+                                    color={colors.ink500}
+                                />
+                            </Pressable>
+                            {open && (
+                                <View
+                                    style={[
+                                        styles.faqBody,
+                                        { backgroundColor: colors.paper2 },
+                                    ]}
+                                >
+                                    <Text style={[styles.faqA, { color: colors.ink700 }]}>
+                                        {it.a}
+                                    </Text>
+                                </View>
+                            )}
+                            {i < FAQ_ITEMS.length - 1 && (
+                                <View
+                                    style={[
+                                        styles.faqDivider,
+                                        { backgroundColor: colors.ink200 },
+                                    ]}
+                                />
+                            )}
+                        </Fragment>
+                    );
+                })}
+            </Card>
+        </View>
+    );
+}
+
+function priorityColor(p: Priority, colors: ReturnType<typeof useThemeColors>) {
+    if (p === "high") return colors.danger600;
+    if (p === "medium") return colors.warn600;
+    return colors.ok600;
+}
+
+function formatRelative(iso: string) {
+    const d = new Date(iso);
+    const today = new Date();
+    const diffH = Math.round((today.getTime() - d.getTime()) / 3600000);
+    if (diffH < 24) return `il y a ${diffH} h`;
+    const diffD = Math.floor(diffH / 24);
+    if (diffD < 7) return `il y a ${diffD} j`;
+    return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+}
+
 const styles = StyleSheet.create({
-    container: {
+    container: { flex: 1 },
+
+    topBar: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    iconChip: {
+        width: 34,
+        height: 34,
+        borderRadius: 99,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+
+    content: {
+        padding: 16,
+        paddingBottom: 120,
+    },
+
+    // Contact CTAs
+    heroRow: {
+        flexDirection: "row",
+        gap: 10,
+        marginBottom: 16,
+    },
+    contactCTA: {
         flex: 1,
+        padding: 14,
+        borderRadius: 12,
     },
-    header: {
-        paddingHorizontal: Spacing.padding.screen,
-        paddingTop: Spacing.xl,
-        paddingBottom: Spacing.md,
+    contactCTAHead: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
     },
-    sectionTitle: {
-        marginBottom: Spacing.md,
+    contactCTALabel: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
     },
-    tabsContainer: {
-        maxHeight: 60,
-        marginBottom: Spacing.md,
+    contactCTASub: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 6,
     },
-    tabsContent: {
-        paddingHorizontal: Spacing.padding.screen,
-        gap: Spacing.sm,
+
+    // Tabs
+    tabsWrap: {
+        marginBottom: 14,
     },
+    tabs: { gap: 6 },
     tab: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.sm,
-        borderRadius: Spacing.borderRadius.full,
-        borderWidth: 1,
-        gap: Spacing.xs,
+        paddingHorizontal: 13,
+        paddingVertical: 7,
+        borderRadius: 99,
+        borderWidth: StyleSheet.hairlineWidth,
     },
     tabText: {
-        fontSize: 18,
-    },
-    tabLabel: {
-        fontSize: Typography.fontSize.sm,
-        fontWeight: Typography.fontWeight.medium,
-    },
-    content: {
-        flex: 1,
-    },
-    contentContainer: {
-        paddingHorizontal: Spacing.padding.screen,
-        paddingBottom: Spacing.xxxl,
-    },
-    ticketCard: {
-        marginBottom: Spacing.md,
-    },
-    ticketHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: Spacing.sm,
-    },
-    priorityBadge: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-    },
-    ticketMeta: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.md,
-        marginBottom: Spacing.sm,
-    },
-    statusBadge: {
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: Spacing.xs,
-        borderRadius: Spacing.borderRadius.sm,
-    },
-    statusText: {
+        fontFamily: FontFamily.uiMedium,
         fontSize: Typography.fontSize.xs,
-        fontWeight: Typography.fontWeight.semibold,
     },
-    messagesCount: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.xs,
+
+    sectionLabel: {
+        marginBottom: 8,
+        paddingLeft: 2,
     },
-    messageIcon: {
-        fontSize: 14,
+
+    // Tickets
+    ticketHead: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        gap: 12,
     },
-    emptyContainer: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: Spacing.huge,
+    ticketCode: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.tiny,
     },
-    emptyIcon: {
-        fontSize: 64,
-        marginBottom: Spacing.md,
-    },
-    categoriesGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: Spacing.sm,
-    },
-    categoryCard: {
-        width: '30%',
-        padding: Spacing.md,
-        borderRadius: Spacing.borderRadius.md,
-        borderWidth: 2,
-        alignItems: 'center',
-        position: 'relative',
-    },
-    categoryIcon: {
-        fontSize: 24,
-        marginBottom: Spacing.xs,
-    },
-    categoryLabel: {
-        textAlign: 'center',
-    },
-    checkmark: {
-        position: 'absolute',
-        top: 4,
-        right: 4,
-        width: 18,
-        height: 18,
-        borderRadius: 9,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    checkmarkIcon: {
-        color: '#FFFFFF',
-        fontSize: 12,
-        fontWeight: 'bold',
-    },
-    textArea: {
-        borderWidth: 1,
-        borderRadius: Spacing.borderRadius.md,
-        padding: Spacing.md,
+    ticketSubject: {
+        fontFamily: FontFamily.uiSemibold,
         fontSize: Typography.fontSize.sm,
+        marginTop: 3,
+    },
+    priorityDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 99,
+        marginTop: 6,
+    },
+    ticketFoot: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        marginTop: 10,
+    },
+    ticketMsg: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+    },
+    ticketMsgText: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+    },
+    ticketLastUpdate: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+    },
+
+    // Categories grid
+    catGrid: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        gap: 8,
+    },
+    catCard: {
+        width: "30.5%",
+        padding: 10,
+        borderRadius: 10,
+        borderWidth: StyleSheet.hairlineWidth,
+        alignItems: "center",
+        gap: 6,
+    },
+    catIcon: {
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    catLabel: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.tiny,
+        textAlign: "center",
+    },
+
+    // Inputs
+    inputWrap: {
+        borderRadius: 10,
+        borderWidth: StyleSheet.hairlineWidth,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+    },
+    input: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.sm,
+        padding: 0,
+    },
+    textareaWrap: {
+        borderRadius: 10,
+        borderWidth: StyleSheet.hairlineWidth,
+        padding: 12,
         minHeight: 120,
     },
-    contactOption: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.md,
-        paddingVertical: Spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
+    textarea: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.sm,
+        textAlignVertical: "top",
+        padding: 0,
     },
-    contactIcon: {
-        fontSize: 24,
+    submit: {
+        marginTop: 18,
+        paddingVertical: 14,
+        paddingHorizontal: 18,
+        borderRadius: 12,
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
     },
-    faqItem: {
-        borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
-        paddingVertical: Spacing.md,
+    submitText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.md,
     },
-    faqQuestion: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
+
+    // FAQ
+    faqHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        paddingVertical: 14,
+        paddingHorizontal: 14,
+        gap: 10,
     },
-    faqIcon: {
-        fontSize: 20,
+    faqQ: {
+        flex: 1,
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.sm,
     },
-    expandIcon: {
-        fontSize: 12,
-        color: '#9CA3AF',
+    faqBody: {
+        paddingHorizontal: 14,
+        paddingVertical: 12,
     },
-    faqAnswer: {
-        marginTop: Spacing.sm,
-        marginLeft: 28,
-        padding: Spacing.md,
-        backgroundColor: '#F9FAFB',
-        borderRadius: Spacing.borderRadius.md,
+    faqA: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.xs,
+        lineHeight: 18,
+    },
+    faqDivider: {
+        height: StyleSheet.hairlineWidth,
     },
 });
