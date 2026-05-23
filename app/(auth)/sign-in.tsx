@@ -65,9 +65,7 @@ export default function SignInScreen() {
             if (user.role === "hotel") {
                 router.replace("/(hotel)/dashboard");
             } else if (user.role === "driver") {
-                // Land on Tournée (liste) plutôt que Carte — la map nécessite
-                // une clé Google Maps Android, sans laquelle l'app crash.
-                router.replace("/(driver)/collections");
+                router.replace("/(driver)/route");
             } else if (user.role === "supervisor") {
                 router.replace("/(supervisor)/production");
             } else {

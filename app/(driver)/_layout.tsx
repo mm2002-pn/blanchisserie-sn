@@ -29,25 +29,21 @@ export default function DriverLayout() {
                 },
             }}
         >
-            {/* Tournée (liste) en premier — landing safe sans MapView.
-                Tant que Google Maps API key n'est pas configurée côté Android,
-                l'écran Carte peut crasher l'app au mount → on évite de l'avoir
-                en défaut. */}
-            <Tabs.Screen
-                name="collections"
-                options={{
-                    title: "Tournée",
-                    tabBarIcon: ({ color, focused }) => (
-                        <TabIcon name="route" color={color} focused={focused} />
-                    ),
-                }}
-            />
             <Tabs.Screen
                 name="route"
                 options={{
                     title: "Carte",
                     tabBarIcon: ({ color, focused }) => (
                         <TabIcon name="map" color={color} focused={focused} />
+                    ),
+                }}
+            />
+            <Tabs.Screen
+                name="collections"
+                options={{
+                    title: "Tournée",
+                    tabBarIcon: ({ color, focused }) => (
+                        <TabIcon name="route" color={color} focused={focused} />
                     ),
                 }}
             />
