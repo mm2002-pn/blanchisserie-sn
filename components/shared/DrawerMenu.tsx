@@ -10,7 +10,7 @@ import {
     Text,
     View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBarSpace } from "./StatusBarSpace";
 import { useRouter } from "expo-router";
 
 import Icon, { IconName } from "@/components/ui/Icon";
@@ -170,7 +170,10 @@ export default function DrawerMenu({ visible, onClose }: DrawerMenuProps) {
                         },
                     ]}
                 >
-                    <SafeAreaView edges={["top"]} style={{ flex: 1 }}>
+                    <View style={{ flex: 1 }}>
+                        {/* Status bar du drawer : même couleur que le header
+                            sinon seam blanc/vert au-dessus de l'heure. */}
+                        <StatusBarSpace color={colors.brand900} />
                         {/* Header */}
                         <View
                             style={[
@@ -313,7 +316,7 @@ export default function DrawerMenu({ visible, onClose }: DrawerMenuProps) {
                                 v1.0.0 · Dakar
                             </Text>
                         </View>
-                    </SafeAreaView>
+                    </View>
                 </Animated.View>
             </View>
         </Modal>
