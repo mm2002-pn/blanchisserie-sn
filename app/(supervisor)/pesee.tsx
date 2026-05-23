@@ -9,7 +9,7 @@ import {
     View,
 } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBarSpace } from "@/components/shared/StatusBarSpace";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -74,10 +74,8 @@ export default function SupervisorPeseeScreen() {
     const totalKg = toWeigh.reduce((s, o) => s + (o.estimatedWeight ?? 0), 0);
 
     return (
-        <SafeAreaView
-            edges={["top"]}
-            style={[styles.container, { backgroundColor: colors.paper2 }]}
-        >
+        <View style={[styles.container, { backgroundColor: colors.paper2 }]}>
+            <StatusBarSpace color={colors.paper} />
             {/* Header */}
             <View
                 style={[
@@ -147,7 +145,7 @@ export default function SupervisorPeseeScreen() {
                 visible={notifsOpen}
                 onClose={() => setNotifsOpen(false)}
             />
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -296,10 +294,8 @@ function WeighForm({
     }, [linenTypes]);
 
     return (
-        <SafeAreaView
-            edges={["top"]}
-            style={[styles.container, { backgroundColor: colors.paper2 }]}
-        >
+        <View style={[styles.container, { backgroundColor: colors.paper2 }]}>
+            <StatusBarSpace color={colors.paper} />
             {/* Header */}
             <View
                 style={[
@@ -505,7 +501,7 @@ function WeighForm({
                     }}
                 />
             )}
-        </SafeAreaView>
+        </View>
     );
 }
 

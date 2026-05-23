@@ -9,7 +9,7 @@ import {
     View,
 } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBarSpace } from "@/components/shared/StatusBarSpace";
 import { useRouter } from "expo-router";
 
 import Card from "@/components/ui/Card";
@@ -114,10 +114,8 @@ export default function HotelDashboard() {
     );
 
     return (
-        <SafeAreaView
-            edges={["top"]}
-            style={[styles.container, { backgroundColor: colors.paper2 }]}
-        >
+        <View style={[styles.container, { backgroundColor: colors.paper2 }]}>
+            <StatusBarSpace color={colors.paper} />
             {/* Top bar */}
             <View style={[styles.topBar, { borderBottomColor: colors.ink200, backgroundColor: colors.paper }]}>
                 <Pressable
@@ -334,7 +332,7 @@ export default function HotelDashboard() {
                 visible={notifsOpen}
                 onClose={() => setNotifsOpen(false)}
             />
-        </SafeAreaView>
+        </View>
     );
 }
 

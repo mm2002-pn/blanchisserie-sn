@@ -7,7 +7,7 @@ import {
     Text,
     View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBarSpace } from "@/components/shared/StatusBarSpace";
 import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -82,10 +82,9 @@ export default function CollectionsScreen() {
     };
 
     return (
-        <SafeAreaView
-            edges={["top"]}
-            style={[styles.container, { backgroundColor: colors.paper2 }]}
-        >
+        <View style={[styles.container, { backgroundColor: colors.paper2 }]}>
+            {/* Bande status bar même couleur que le header → transition invisible */}
+            <StatusBarSpace color={colors.paper} />
             {/* Header */}
             <View
                 style={[
@@ -203,7 +202,7 @@ export default function CollectionsScreen() {
                 visible={notifsOpen}
                 onClose={() => setNotifsOpen(false)}
             />
-        </SafeAreaView>
+        </View>
     );
 }
 
