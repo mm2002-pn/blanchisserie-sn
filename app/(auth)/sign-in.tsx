@@ -17,7 +17,6 @@ import Icon from "@/components/ui/Icon";
 import Input from "@/components/ui/Input";
 import ThemedText from "@/components/ui/ThemedText";
 import { FontFamily, Typography } from "@/constants/Typography";
-import { Spacing } from "@/constants/Spacing";
 import { useAuth } from "@/contexts/AuthContext";
 import { useThemeColors } from "@/hooks/useThemeColors";
 
@@ -234,75 +233,6 @@ export default function SignInScreen() {
                         </Pressable>
                     </View>
 
-                    {/* Test accounts — à retirer à l'intégration de l'API réelle */}
-                    <View
-                        style={[
-                            styles.helper,
-                            { backgroundColor: colors.paper2, borderColor: colors.ink200 },
-                        ]}
-                    >
-                        <Text style={[styles.helperTitle, { color: colors.ink600 }]}>
-                            Comptes de test · mot de passe : Password!1
-                        </Text>
-
-                        {/* Hôtels (3 comptes pour tester un circuit avec 3 commandes) */}
-                        <Text style={[styles.helperGroup, { color: colors.ink500 }]}>
-                            Hôtels
-                        </Text>
-                        {[
-                            ["Almadies", "hotel@blanchisserie.sn"],
-                            ["Radisson", "radisson@blanchisserie.sn"],
-                            ["Pullman", "pullman@blanchisserie.sn"],
-                        ].map(([role, mail]) => (
-                            <Pressable
-                                key={role}
-                                onPress={() => {
-                                    setEmail(mail);
-                                    setPassword("Password!1");
-                                }}
-                                style={styles.helperRow}
-                                hitSlop={4}
-                            >
-                                <Text style={[styles.helperRole, { color: colors.ink700 }]}>
-                                    {role}
-                                </Text>
-                                <Text style={[styles.helperMail, { color: colors.ink500 }]}>
-                                    {mail}
-                                </Text>
-                            </Pressable>
-                        ))}
-
-                        {/* Staff */}
-                        <Text
-                            style={[
-                                styles.helperGroup,
-                                { color: colors.ink500, marginTop: 8 },
-                            ]}
-                        >
-                            Staff
-                        </Text>
-                        {[
-                            ["Chauffeur", "driver@blanchisserie.sn"],
-                            ["Superviseur", "sup@blanchisserie.sn"],
-                        ].map(([role, mail]) => (
-                            <Pressable
-                                key={role}
-                                onPress={() => {
-                                    setEmail(mail);
-                                    setPassword("Password!1");
-                                }}
-                                style={styles.helperRow}
-                                hitSlop={4}
-                            >
-                                <Text style={[styles.helperRole, { color: colors.ink700 }]}>
-                                    {role}
-                                </Text>
-                                <Text style={[styles.helperMail, { color: colors.ink500 }]}>
-                                    {mail}
-                                </Text>
-                            </Pressable>
-                        ))}
-                    </View>
                 </View>
             </ScrollView>
         </KeyboardAvoidingView>
@@ -393,42 +323,6 @@ const styles = StyleSheet.create({
     },
     signupLink: {
         fontFamily: FontFamily.uiSemibold,
-        fontSize: Typography.fontSize.xs,
-    },
-    helper: {
-        marginTop: Spacing.xl,
-        padding: 12,
-        borderRadius: 10,
-        borderWidth: StyleSheet.hairlineWidth,
-    },
-    helperTitle: {
-        fontFamily: FontFamily.uiSemibold,
-        fontSize: Typography.fontSize.micro,
-        letterSpacing: Typography.letterSpacing.wide,
-        textTransform: "uppercase",
-        marginBottom: 8,
-    },
-    helperGroup: {
-        fontFamily: FontFamily.uiSemibold,
-        fontSize: Typography.fontSize.micro,
-        letterSpacing: Typography.letterSpacing.wide,
-        textTransform: "uppercase",
-        marginTop: 4,
-        marginBottom: 2,
-        opacity: 0.7,
-    },
-    helperRow: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        paddingVertical: 2,
-    },
-    helperRole: {
-        fontFamily: FontFamily.uiSemibold,
-        fontSize: Typography.fontSize.xs,
-    },
-    helperMail: {
-        fontFamily: FontFamily.monoRegular,
         fontSize: Typography.fontSize.xs,
     },
 });
