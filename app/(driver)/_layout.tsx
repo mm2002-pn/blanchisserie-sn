@@ -1,5 +1,6 @@
 import { Tabs } from "expo-router";
 import { StyleSheet } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon, { IconName } from "@/components/ui/Icon";
 import { FontFamily, Typography } from "@/constants/Typography";
 import { useOrderNotifications } from "@/hooks/useOrderNotifications";
@@ -7,6 +8,7 @@ import { useThemeColors } from "@/hooks/useThemeColors";
 
 export default function DriverLayout() {
     const colors = useThemeColors();
+    const insets = useSafeAreaInsets();
     useOrderNotifications("driver");
 
     return (
@@ -19,9 +21,11 @@ export default function DriverLayout() {
                     backgroundColor: colors.paper,
                     borderTopColor: colors.ink200,
                     borderTopWidth: StyleSheet.hairlineWidth,
-                    height: 70,
+                    // Compense la nav bar système Android (boutons III O <)
+                    // sinon le tab bar passe DESSOUS (edgeToEdge activé).
+                    height: 70 + insets.bottom,
                     paddingTop: 8,
-                    paddingBottom: 10,
+                    paddingBottom: 10 + insets.bottom,
                 },
                 tabBarLabelStyle: {
                     fontFamily: FontFamily.uiMedium,
