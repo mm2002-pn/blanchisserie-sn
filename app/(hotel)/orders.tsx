@@ -1,14 +1,16 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useCallback, useMemo, useState } from "react";
 import {
     Alert,
     FlatList,
     Pressable,
+    RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
     TextInput,
     View,
 } from "react-native";
+import { useQueryClient } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
@@ -16,6 +18,7 @@ import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
 import StatusBadge, { OrderStatus as UIStatus } from "@/components/ui/StatusBadge";
 import ThemedText from "@/components/ui/ThemedText";
+import { OrderQrModal } from "@/components/shared/OrderQrModal";
 import { FontFamily, Typography } from "@/constants/Typography";
 import { useOrder } from "@/contexts/OrderContext";
 import { useThemeColors } from "@/hooks/useThemeColors";
@@ -81,10 +84,22 @@ export default function OrdersScreen() {
     const router = useRouter();
     const colors = useThemeColors();
     const { orders, cancelOrder } = useOrder();
+    const qc = useQueryClient();
+    const [refreshing, setRefreshing] = useState(false);
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try {
+            await qc.invalidateQueries({ queryKey: ["orders"] });
+        } finally {
+            setRefreshing(false);
+        }
+    }, [qc]);
 
     const [selected, setSelected] = useState<FilterId>("all");
     const [search, setSearch] = useState("");
     const [cancellingId, setCancellingId] = useState<string | null>(null);
+    const [qrOrder, setQrOrder] = useState<Order | null>(null);
 
     const filtered = useMemo(() => {
         const term = search.trim().toLowerCase();
@@ -223,6 +238,14 @@ export default function OrdersScreen() {
                 keyExtractor={(o) => o.id}
                 contentContainerStyle={styles.list}
                 showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor={colors.brand800}
+                        colors={[colors.brand800]}
+                    />
+                }
                 renderItem={({ item }) => (
                     <OrderCard
                         order={item}
@@ -233,6 +256,7 @@ export default function OrdersScreen() {
                             })
                         }
                         onCancel={() => handleCancel(item.id)}
+                        onShowQr={() => setQrOrder(item)}
                         cancelling={cancellingId === item.id}
                     />
                 )}
@@ -256,6 +280,16 @@ export default function OrdersScreen() {
                     </View>
                 }
             />
+
+            {qrOrder && (
+                <OrderQrModal
+                    visible={!!qrOrder}
+                    onClose={() => setQrOrder(null)}
+                    orderId={qrOrder.id}
+                    orderNumber={qrOrder.orderNumber}
+                    clientName={qrOrder.hotelName}
+                />
+            )}
         </SafeAreaView>
     );
 }
@@ -264,11 +298,13 @@ function OrderCard({
     order,
     onPress,
     onCancel,
+    onShowQr,
     cancelling,
 }: {
     order: Order;
     onPress: () => void;
     onCancel: () => void;
+    onShowQr: () => void;
     cancelling: boolean;
 }) {
     const colors = useThemeColors();
@@ -277,6 +313,8 @@ function OrderCard({
     const progress = STATUS_TO_PROGRESS[order.status];
     const isCancelled = order.status === "cancelled";
     const canCancel = order.status === "pending" || order.status === "confirmed";
+    const canShowQr =
+        order.status === "pending" || order.status === "confirmed";
 
     return (
         <Pressable onPress={onPress}>
@@ -331,26 +369,46 @@ function OrderCard({
                     })}
                 </View>
 
-                {canCancel && (
+                {(canCancel || canShowQr) && (
                     <View style={styles.actions}>
-                        <Pressable
-                            onPress={(e) => {
-                                e.stopPropagation();
-                                onCancel();
-                            }}
-                            disabled={cancelling}
-                            style={[
-                                styles.action,
-                                {
-                                    backgroundColor: colors.danger100,
-                                    opacity: cancelling ? 0.6 : 1,
-                                },
-                            ]}
-                        >
-                            <Text style={[styles.actionText, { color: colors.danger600 }]}>
-                                {cancelling ? "Annulation…" : "Annuler"}
-                            </Text>
-                        </Pressable>
+                        {canShowQr && (
+                            <Pressable
+                                onPress={(e) => {
+                                    e.stopPropagation();
+                                    onShowQr();
+                                }}
+                                style={[
+                                    styles.action,
+                                    { backgroundColor: colors.brand100 },
+                                ]}
+                            >
+                                <Text
+                                    style={[styles.actionText, { color: colors.brand800 }]}
+                                >
+                                    QR
+                                </Text>
+                            </Pressable>
+                        )}
+                        {canCancel && (
+                            <Pressable
+                                onPress={(e) => {
+                                    e.stopPropagation();
+                                    onCancel();
+                                }}
+                                disabled={cancelling}
+                                style={[
+                                    styles.action,
+                                    {
+                                        backgroundColor: colors.danger100,
+                                        opacity: cancelling ? 0.6 : 1,
+                                    },
+                                ]}
+                            >
+                                <Text style={[styles.actionText, { color: colors.danger600 }]}>
+                                    {cancelling ? "Annulation…" : "Annuler"}
+                                </Text>
+                            </Pressable>
+                        )}
                     </View>
                 )}
             </Card>

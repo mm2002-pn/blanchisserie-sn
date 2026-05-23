@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
     Platform,
     Pressable,
@@ -17,6 +17,10 @@ import Icon, { IconName } from "@/components/ui/Icon";
 import ThemedText from "@/components/ui/ThemedText";
 import { FontFamily, Typography } from "@/constants/Typography";
 import { useThemeColors } from "@/hooks/useThemeColors";
+import { useOrders } from "@/hooks/useOrders";
+import { useOrdersRealtime } from "@/hooks/useOrdersRealtime";
+import { formatDayHeader, formatHour, isToday } from "@/lib/date";
+import type { Order } from "@/types/order.types";
 
 type StopStatus = "completed" | "current" | "upcoming";
 type StopType = "collecte" | "livraison";
@@ -32,6 +36,26 @@ type RouteStop = {
     lat: number;
     lng: number;
 };
+
+/** Pseudo-position : on étale les arrêts autour du centre Dakar tant que
+ *  la BDD n'expose pas de geoLat/geoLng par client. */
+function pseudoCoord(seed: string, base: { latitude: number; longitude: number }) {
+    let h = 0;
+    for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+    const dx = ((h & 0xff) / 255 - 0.5) * 0.04;
+    const dy = (((h >> 8) & 0xff) / 255 - 0.5) * 0.04;
+    return { latitude: base.latitude + dy, longitude: base.longitude + dx };
+}
+
+function deriveStopType(o: Order): StopType {
+    return o.status === "ready" || o.status === "delivered" ? "livraison" : "collecte";
+}
+
+function deriveStopStatus(o: Order): StopStatus {
+    if (o.status === "delivered" || o.status === "collected") return "completed";
+    if (o.status === "in_progress" || o.status === "ready") return "current";
+    return "upcoming";
+}
 
 /** Position de départ (atelier Dakar Nord) */
 const DRIVER_ORIGIN = { latitude: 14.7558, longitude: -17.4440 };
@@ -49,42 +73,54 @@ export default function NavigationScreen() {
 
     const [routeOptimized, setRouteOptimized] = useState(true);
     const [trafficEnabled, setTrafficEnabled] = useState(true);
+    const [filter, setFilter] = useState<"all" | "collecte" | "livraison">("all");
 
-    const routeStops: RouteStop[] = [
-        {
-            id: "1",
-            name: "King Fahd Palace",
-            address: "Route de la Corniche Ouest",
-            distance: "0,5 km",
-            estimatedTime: "2 min",
-            status: "current",
-            type: "collecte",
-            lat: 14.7087,
-            lng: -17.4870,
-        },
-        {
-            id: "2",
-            name: "Hôtel Djoloff",
-            address: "Avenue Cheikh Anta Diop",
-            distance: "4,2 km",
-            estimatedTime: "12 min",
-            status: "upcoming",
-            type: "livraison",
-            lat: 14.6956,
-            lng: -17.4541,
-        },
-        {
-            id: "3",
-            name: "Radisson Blu",
-            address: "Route de la Corniche Ouest",
-            distance: "6,8 km",
-            estimatedTime: "18 min",
-            status: "upcoming",
-            type: "collecte",
-            lat: 14.7125,
-            lng: -17.4840,
-        },
-    ];
+    useOrdersRealtime();
+    const { data: liveOrders } = useOrders();
+
+    /** Liste des arrêts du jour, dérivée des commandes API. */
+    const todayStops = useMemo<RouteStop[]>(() => {
+        if (!liveOrders) return [];
+        const base = { latitude: DAKAR_REGION.latitude, longitude: DAKAR_REGION.longitude };
+        return liveOrders
+            .filter((o) => {
+                const type = deriveStopType(o);
+                const anchor =
+                    type === "livraison"
+                        ? o.deliveryPlannedAt ?? o.collectionPlannedAt ?? o.deliveryDate ?? o.collectionDate
+                        : o.collectionPlannedAt ?? o.collectionDate;
+                return isToday(anchor);
+            })
+            .map((o) => {
+                const type = deriveStopType(o);
+                const anchor =
+                    type === "livraison"
+                        ? o.deliveryPlannedAt ?? o.collectionPlannedAt ?? o.deliveryDate ?? o.collectionDate
+                        : o.collectionPlannedAt ?? o.collectionDate;
+                const coord = pseudoCoord(o.id, base);
+                return {
+                    id: o.id,
+                    name: o.hotelName || o.orderNumber,
+                    address: "—",
+                    distance: "—",
+                    estimatedTime: formatHour(anchor),
+                    status: deriveStopStatus(o),
+                    type,
+                    lat: coord.latitude,
+                    lng: coord.longitude,
+                };
+            });
+    }, [liveOrders]);
+
+    const filteredStops = useMemo(
+        () => (filter === "all" ? todayStops : todayStops.filter((s) => s.type === filter)),
+        [todayStops, filter],
+    );
+
+    const collectsCount = todayStops.filter((s) => s.type === "collecte").length;
+    const deliveriesCount = todayStops.filter((s) => s.type === "livraison").length;
+
+    const routeStops: RouteStop[] = filteredStops;
 
     const mapRef = useRef<MapView | null>(null);
     const polylineCoords = [
@@ -119,6 +155,30 @@ export default function NavigationScreen() {
                     <Icon name="settings" size={18} color={colors.ink800} />
                 </Pressable>
             </View>
+
+            <View style={[styles.filterRow, { backgroundColor: colors.paper, borderBottomColor: colors.ink200 }]}>
+                <FilterChip
+                    label={`Tous · ${todayStops.length}`}
+                    active={filter === "all"}
+                    onPress={() => setFilter("all")}
+                />
+                <FilterChip
+                    label={`Collectes · ${collectsCount}`}
+                    icon="package"
+                    active={filter === "collecte"}
+                    onPress={() => setFilter("collecte")}
+                />
+                <FilterChip
+                    label={`Livraisons · ${deliveriesCount}`}
+                    icon="truck"
+                    active={filter === "livraison"}
+                    onPress={() => setFilter("livraison")}
+                />
+            </View>
+
+            <Text style={[styles.dayHeader, { color: colors.ink500, backgroundColor: colors.paper2 }]}>
+                Tournée · {formatDayHeader()}
+            </Text>
 
             <ScrollView
                 contentContainerStyle={styles.content}
@@ -355,7 +415,7 @@ export default function NavigationScreen() {
                 {/* Route overview */}
                 <View style={styles.routeHeader}>
                     <ThemedText variate="caps" color="ink500">
-                        Aperçu de la tournée
+                        Arrêts du jour · {routeStops.length}
                     </ThemedText>
                     <View style={styles.routeStats}>
                         <View style={styles.routeStat}>
@@ -374,15 +434,28 @@ export default function NavigationScreen() {
                 </View>
 
                 <Card padding={14}>
-                    <View style={styles.stopsList}>
-                        {routeStops.map((stop, i) => (
-                            <RouteStopRow
-                                key={stop.id}
-                                stop={stop}
-                                isLast={i === routeStops.length - 1}
-                            />
-                        ))}
-                    </View>
+                    {routeStops.length === 0 ? (
+                        <View style={styles.emptyMap}>
+                            <Icon name="map" size={32} color={colors.ink400} />
+                            <Text style={[styles.emptyMapText, { color: colors.ink500 }]}>
+                                {filter === "all"
+                                    ? "Aucun arrêt prévu aujourd'hui"
+                                    : filter === "collecte"
+                                      ? "Aucune collecte aujourd'hui"
+                                      : "Aucune livraison aujourd'hui"}
+                            </Text>
+                        </View>
+                    ) : (
+                        <View style={styles.stopsList}>
+                            {routeStops.map((stop, i) => (
+                                <RouteStopRow
+                                    key={stop.id}
+                                    stop={stop}
+                                    isLast={i === routeStops.length - 1}
+                                />
+                            ))}
+                        </View>
+                    )}
                 </Card>
 
                 {/* Quick actions */}
@@ -397,6 +470,48 @@ export default function NavigationScreen() {
 }
 
 /* ---------- sous-composants ---------- */
+
+function FilterChip({
+    label,
+    icon,
+    active,
+    onPress,
+}: {
+    label: string;
+    icon?: IconName;
+    active: boolean;
+    onPress: () => void;
+}) {
+    const colors = useThemeColors();
+    return (
+        <Pressable
+            onPress={onPress}
+            style={[
+                styles.filterChip,
+                {
+                    backgroundColor: active ? colors.brand800 : colors.paper2,
+                    borderColor: active ? colors.brand800 : colors.ink200,
+                },
+            ]}
+        >
+            {icon && (
+                <Icon
+                    name={icon}
+                    size={11}
+                    color={active ? colors.paper : colors.ink700}
+                />
+            )}
+            <Text
+                style={[
+                    styles.filterChipText,
+                    { color: active ? colors.paper : colors.ink700 },
+                ]}
+            >
+                {label}
+            </Text>
+        </Pressable>
+    );
+}
 
 function MapControl({
     icon,
@@ -619,6 +734,43 @@ const styles = StyleSheet.create({
     },
     content: { padding: 16, paddingBottom: 120 },
     sectionLabel: { marginBottom: 10, paddingLeft: 4 },
+
+    filterRow: {
+        flexDirection: "row",
+        gap: 8,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    filterChip: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 5,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 999,
+        borderWidth: StyleSheet.hairlineWidth,
+    },
+    filterChipText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.tiny,
+    },
+    dayHeader: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
+        paddingHorizontal: 16,
+        paddingVertical: 6,
+        textTransform: "capitalize",
+    },
+    emptyMap: {
+        alignItems: "center",
+        gap: 10,
+        paddingVertical: 30,
+    },
+    emptyMapText: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.tiny,
+    },
 
     // Map
     mapCard: { marginBottom: 14 },

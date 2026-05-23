@@ -155,7 +155,7 @@ export default function SignInScreen() {
 
                     <Input
                         label="Email professionnel"
-                        placeholder="awa.ndiaye@pullman-teranga.sn"
+                        placeholder="hotel@blanchisserie.sn"
                         value={email}
                         onChangeText={setEmail}
                         error={errors.email}
@@ -242,21 +242,65 @@ export default function SignInScreen() {
                         ]}
                     >
                         <Text style={[styles.helperTitle, { color: colors.ink600 }]}>
-                            Comptes de test
+                            Comptes de test · mot de passe : Password!1
+                        </Text>
+
+                        {/* Hôtels (3 comptes pour tester un circuit avec 3 commandes) */}
+                        <Text style={[styles.helperGroup, { color: colors.ink500 }]}>
+                            Hôtels
                         </Text>
                         {[
-                            ["Hôtel", "hotel@test.com"],
-                            ["Chauffeur", "driver@test.com"],
-                            ["Superviseur", "supervisor@test.com"],
+                            ["Almadies", "hotel@blanchisserie.sn"],
+                            ["Radisson", "radisson@blanchisserie.sn"],
+                            ["Pullman", "pullman@blanchisserie.sn"],
                         ].map(([role, mail]) => (
-                            <View key={role} style={styles.helperRow}>
+                            <Pressable
+                                key={role}
+                                onPress={() => {
+                                    setEmail(mail);
+                                    setPassword("Password!1");
+                                }}
+                                style={styles.helperRow}
+                                hitSlop={4}
+                            >
                                 <Text style={[styles.helperRole, { color: colors.ink700 }]}>
                                     {role}
                                 </Text>
                                 <Text style={[styles.helperMail, { color: colors.ink500 }]}>
-                                    {mail} · password
+                                    {mail}
                                 </Text>
-                            </View>
+                            </Pressable>
+                        ))}
+
+                        {/* Staff */}
+                        <Text
+                            style={[
+                                styles.helperGroup,
+                                { color: colors.ink500, marginTop: 8 },
+                            ]}
+                        >
+                            Staff
+                        </Text>
+                        {[
+                            ["Chauffeur", "driver@blanchisserie.sn"],
+                            ["Superviseur", "sup@blanchisserie.sn"],
+                        ].map(([role, mail]) => (
+                            <Pressable
+                                key={role}
+                                onPress={() => {
+                                    setEmail(mail);
+                                    setPassword("Password!1");
+                                }}
+                                style={styles.helperRow}
+                                hitSlop={4}
+                            >
+                                <Text style={[styles.helperRole, { color: colors.ink700 }]}>
+                                    {role}
+                                </Text>
+                                <Text style={[styles.helperMail, { color: colors.ink500 }]}>
+                                    {mail}
+                                </Text>
+                            </Pressable>
                         ))}
                     </View>
                 </View>
@@ -363,6 +407,15 @@ const styles = StyleSheet.create({
         letterSpacing: Typography.letterSpacing.wide,
         textTransform: "uppercase",
         marginBottom: 8,
+    },
+    helperGroup: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.micro,
+        letterSpacing: Typography.letterSpacing.wide,
+        textTransform: "uppercase",
+        marginTop: 4,
+        marginBottom: 2,
+        opacity: 0.7,
     },
     helperRow: {
         flexDirection: "row",

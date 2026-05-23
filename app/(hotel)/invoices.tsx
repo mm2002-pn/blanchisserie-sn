@@ -15,8 +15,8 @@ import Icon from "@/components/ui/Icon";
 import StatusBadge, { OrderStatus as UIStatus } from "@/components/ui/StatusBadge";
 import ThemedText from "@/components/ui/ThemedText";
 import { FontFamily, Typography } from "@/constants/Typography";
-import { mockInvoices } from "@/data/mock-invoices";
 import { useAuth } from "@/contexts/AuthContext";
+import { useInvoices, useInvoicesRealtime } from "@/hooks/useInvoices";
 import { useThemeColors } from "@/hooks/useThemeColors";
 import type { Invoice, InvoiceStatus, PaymentMethod } from "@/types/invoice.types";
 
@@ -71,10 +71,9 @@ export default function InvoicesScreen() {
     const { user } = useAuth();
     const [selected, setSelected] = useState<FilterId>("all");
 
-    const hotelInvoices = useMemo(
-        () => mockInvoices.filter((i) => i.hotelId === (user?.id ?? "1")),
-        [user?.id],
-    );
+    useInvoicesRealtime();
+    const { data } = useInvoices(user?.clientId ?? undefined);
+    const hotelInvoices = data ?? [];
 
     const outstanding = useMemo(
         () =>

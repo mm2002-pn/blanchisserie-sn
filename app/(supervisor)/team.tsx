@@ -13,6 +13,7 @@ import Icon, { IconName } from "@/components/ui/Icon";
 import ThemedText from "@/components/ui/ThemedText";
 import { FontFamily, Typography } from "@/constants/Typography";
 import { useThemeColors } from "@/hooks/useThemeColors";
+import { useTeam } from "@/hooks/useTeam";
 
 type ShiftStatus = "En poste" | "Pause" | "Absent" | "Congé";
 
@@ -25,81 +26,6 @@ type Member = {
     shift: string;
     productivityPct: number;
 };
-
-const FILTERS: { key: "all" | Member["team"]; label: string }[] = [
-    { key: "all", label: "Tous" },
-    { key: "Lavage", label: "Lavage" },
-    { key: "Séchage", label: "Séchage" },
-    { key: "Calandre", label: "Calandre" },
-    { key: "Logistique", label: "Logistique" },
-    { key: "Qualité", label: "Qualité" },
-];
-
-const MEMBERS: Member[] = [
-    {
-        id: "1",
-        name: "Aminata Diop",
-        role: "Responsable qualité",
-        team: "Qualité",
-        status: "En poste",
-        shift: "07:00 – 15:00",
-        productivityPct: 96,
-    },
-    {
-        id: "2",
-        name: "Mamadou Fall",
-        role: "Opérateur senior",
-        team: "Lavage",
-        status: "En poste",
-        shift: "07:00 – 15:00",
-        productivityPct: 92,
-    },
-    {
-        id: "3",
-        name: "Ndeye Kane",
-        role: "Opératrice calandre",
-        team: "Calandre",
-        status: "Pause",
-        shift: "07:00 – 15:00",
-        productivityPct: 88,
-    },
-    {
-        id: "4",
-        name: "Ibrahima Sy",
-        role: "Opérateur séchage",
-        team: "Séchage",
-        status: "En poste",
-        shift: "07:00 – 15:00",
-        productivityPct: 84,
-    },
-    {
-        id: "5",
-        name: "Fatou Ndiaye",
-        role: "Chauffeur-livreur",
-        team: "Logistique",
-        status: "En poste",
-        shift: "06:00 – 14:00",
-        productivityPct: 98,
-    },
-    {
-        id: "6",
-        name: "Cheikh Bâ",
-        role: "Chauffeur-livreur",
-        team: "Logistique",
-        status: "Absent",
-        shift: "—",
-        productivityPct: 0,
-    },
-    {
-        id: "7",
-        name: "Rokhaya Thiam",
-        role: "Contrôleuse qualité",
-        team: "Qualité",
-        status: "Congé",
-        shift: "—",
-        productivityPct: 0,
-    },
-];
 
 const STATUS_TINT: Record<
     ShiftStatus,
@@ -114,15 +40,26 @@ const STATUS_TINT: Record<
 export default function TeamScreen() {
     const colors = useThemeColors();
     const [filter, setFilter] = useState<"all" | Member["team"]>("all");
+    const { data } = useTeam();
+    const members: Member[] = (data ?? []) as Member[];
+
+    /** Filtres dérivés des équipes réellement présentes dans les données. */
+    const FILTERS = useMemo<{ key: "all" | Member["team"]; label: string }[]>(() => {
+        const teams = Array.from(new Set(members.map((m) => m.team))).sort();
+        return [
+            { key: "all", label: "Tous" },
+            ...teams.map((t) => ({ key: t, label: t })),
+        ];
+    }, [members]);
 
     const visible = useMemo(
-        () => (filter === "all" ? MEMBERS : MEMBERS.filter((m) => m.team === filter)),
-        [filter],
+        () => (filter === "all" ? members : members.filter((m) => m.team === filter)),
+        [filter, members],
     );
 
-    const active = MEMBERS.filter((m) => m.status === "En poste").length;
-    const paused = MEMBERS.filter((m) => m.status === "Pause").length;
-    const absent = MEMBERS.filter(
+    const active = members.filter((m) => m.status === "En poste").length;
+    const paused = members.filter((m) => m.status === "Pause").length;
+    const absent = members.filter(
         (m) => m.status === "Absent" || m.status === "Congé",
     ).length;
 
@@ -139,7 +76,7 @@ export default function TeamScreen() {
             >
                 <ThemedText variate="title">Équipe</ThemedText>
                 <Text style={[styles.headerSub, { color: colors.ink500 }]}>
-                    Atelier Dakar · {MEMBERS.length} collaborateurs
+                    Atelier Dakar · {members.length} collaborateurs
                 </Text>
             </View>
 

@@ -13,6 +13,7 @@ import StatusBadge from "@/components/ui/StatusBadge";
 import ThemedText from "@/components/ui/ThemedText";
 import { FontFamily, Typography } from "@/constants/Typography";
 import { useThemeColors } from "@/hooks/useThemeColors";
+import { useMachines } from "@/hooks/useMachines";
 
 type MachineStatus = "Active" | "Maintenance" | "HS";
 
@@ -27,79 +28,6 @@ type Machine = {
     nextMaintenance: string;
 };
 
-const MACHINES: Machine[] = [
-    {
-        id: "1",
-        ref: "L-01",
-        model: "PRIMUS FX600",
-        category: "Laveuse",
-        status: "Active",
-        loadKg: 52,
-        capacityKg: 60,
-        nextMaintenance: "12 mai",
-    },
-    {
-        id: "2",
-        ref: "L-02",
-        model: "GIRBAU HS6057",
-        category: "Laveuse",
-        status: "Active",
-        loadKg: 48,
-        capacityKg: 57,
-        nextMaintenance: "30 avr.",
-    },
-    {
-        id: "3",
-        ref: "L-03",
-        model: "PRIMUS FX350",
-        category: "Laveuse",
-        status: "Maintenance",
-        loadKg: 0,
-        capacityKg: 35,
-        nextMaintenance: "en cours",
-    },
-    {
-        id: "4",
-        ref: "S-01",
-        model: "PRIMUS I50-320",
-        category: "Sécheuse",
-        status: "Active",
-        loadKg: 120,
-        capacityKg: 145,
-        nextMaintenance: "18 mai",
-    },
-    {
-        id: "5",
-        ref: "S-02",
-        model: "GIRBAU PB5132",
-        category: "Sécheuse",
-        status: "Active",
-        loadKg: 98,
-        capacityKg: 145,
-        nextMaintenance: "02 juin",
-    },
-    {
-        id: "6",
-        ref: "C-01",
-        model: "PRIMUS FI280",
-        category: "Calandre",
-        status: "Active",
-        loadKg: 40,
-        capacityKg: 45,
-        nextMaintenance: "10 mai",
-    },
-    {
-        id: "7",
-        ref: "P-01",
-        model: "GIRBAU MP45",
-        category: "Presse",
-        status: "HS",
-        loadKg: 0,
-        capacityKg: 25,
-        nextMaintenance: "à planifier",
-    },
-];
-
 const CAT_ICON: Record<Machine["category"], IconName> = {
     Laveuse: "droplet",
     Sécheuse: "thermo",
@@ -109,10 +37,12 @@ const CAT_ICON: Record<Machine["category"], IconName> = {
 
 export default function MachinesScreen() {
     const colors = useThemeColors();
+    const { data } = useMachines();
+    const machines = (data ?? []) as Machine[];
 
-    const active = MACHINES.filter((m) => m.status === "Active").length;
-    const maintenance = MACHINES.filter((m) => m.status === "Maintenance").length;
-    const hs = MACHINES.filter((m) => m.status === "HS").length;
+    const active = machines.filter((m) => m.status === "Active").length;
+    const maintenance = machines.filter((m) => m.status === "Maintenance").length;
+    const hs = machines.filter((m) => m.status === "HS").length;
 
     return (
         <SafeAreaView
@@ -143,11 +73,11 @@ export default function MachinesScreen() {
                 </View>
 
                 <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
-                    Parc machines · {MACHINES.length}
+                    Parc machines · {machines.length}
                 </ThemedText>
 
                 <View style={{ gap: 10 }}>
-                    {MACHINES.map((m) => (
+                    {machines.map((m) => (
                         <MachineRow key={m.id} machine={m} />
                     ))}
                 </View>

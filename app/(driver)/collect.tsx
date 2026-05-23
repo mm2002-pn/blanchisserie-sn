@@ -1,41 +1,182 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     Alert,
     Animated,
     Easing,
     Pressable,
+    ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import Svg, { G, Path, Rect } from "react-native-svg";
 
 import Icon from "@/components/ui/Icon";
+import { SignaturePad } from "@/components/shared/SignaturePad";
 import { FontFamily, Typography } from "@/constants/Typography";
 import { useThemeColors } from "@/hooks/useThemeColors";
+import { useCollectOrder, useOrder, useOrders } from "@/hooks/useOrders";
+import { useLinenTypes } from "@/hooks/useLinenTypes";
+import { useOrdersRealtime } from "@/hooks/useOrdersRealtime";
+import { ApiError } from "@/services/api";
+import { capturePhoto, currentPosition } from "@/services/capture.service";
+import { uploadPhotos } from "@/services/uploads.service";
+import { formatDayHeader, formatHour, isToday } from "@/lib/date";
+import { openMapsNavigation } from "@/lib/maps";
+import type { Order } from "@/types/order.types";
 
 const FRAME_SIZE = 240;
 
-const MOCK_CLIENT = {
-    code: "TRB-2504-041",
-    name: "Terrou-Bi",
-    estimatedWeight: 24.5,
-    pieces: 96,
-    stopIndex: 3,
-    stopTotal: 6,
+/** Libellés FR pour les types de linge (clé = LinenType côté API/types). */
+const LINEN_LABEL: Record<string, string> = {
+    drap: "Drap",
+    taie: "Taie d'oreiller",
+    serviette: "Serviette",
+    nappe: "Nappe",
+    torchon: "Torchon",
+    rideau: "Rideau",
+    couverture: "Couverture",
+    housse: "Housse de couette",
+    peignoir: "Peignoir",
+    tapis: "Tapis",
 };
 
 export default function CollectScreen() {
     const router = useRouter();
     const colors = useThemeColors();
+    const params = useLocalSearchParams<{
+        orderId?: string;
+        mode?: string;
+        roundId?: string;
+    }>();
     const [permission, requestPermission] = useCameraPermissions();
 
+    /** Mode liste = écran d'accueil avec collectes du jour. Mode scan = caméra QR. */
+    const [mode, setMode] = useState<"list" | "scan">("list");
+    const [dayFilter, setDayFilter] = useState<"today" | "all">("today");
+
     const [scanned, setScanned] = useState(false);
-    const [photosCount, setPhotosCount] = useState(0);
-    const [signed, setSigned] = useState(false);
+    const [scannedId, setScannedId] = useState<string | null>(null);
+    const [showItemsDetail, setShowItemsDetail] = useState(false);
+    const [manualMode, setManualMode] = useState(false);
+    const [manualInput, setManualInput] = useState("");
+    const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+    const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
+    const [signaturePadOpen, setSignaturePadOpen] = useState(false);
+
+    useOrdersRealtime();
+    const { data: liveOrders } = useOrders();
+
+    const collects = useMemo<Order[]>(() => {
+        if (!liveOrders) return [];
+        const collectStatuses: Order["status"][] = [
+            "pending",
+            "confirmed",
+            "collected",
+        ];
+        return liveOrders.filter((o) => collectStatuses.includes(o.status));
+    }, [liveOrders]);
+
+    const collectsToday = useMemo(
+        () => collects.filter((o) => isToday(o.collectionPlannedAt ?? o.collectionDate)),
+        [collects],
+    );
+    const visibleCollects = dayFilter === "today" ? collectsToday : collects;
+
+    /** Reset complet à chaque ouverture de l'écran (focus), peu importe
+     *  comment on est arrivé. Évite que les données d'une collecte précédente
+     *  (photos, signature, quantités) suivent sur la commande suivante. */
+    useFocusEffect(
+        useCallback(() => {
+            // Toujours reset les inputs utilisateur
+            setManualMode(false);
+            setManualInput("");
+            setPhotoUrls([]);
+            setSignatureUrl(null);
+            setSignaturePadOpen(false);
+            setReceivedByType({});
+            setShowItemsDetail(false);
+
+            // Mode / commande active : dépend des params
+            if (params.orderId) {
+                setMode("scan");
+                setScanned(true);
+                setScannedId(String(params.orderId));
+            } else {
+                setMode("list");
+                setScanned(false);
+                setScannedId(null);
+            }
+        }, [params.orderId]),
+    );
+
+    const photosCount = photoUrls.length;
+    const signed = !!signatureUrl;
+
+    /** Récupère la commande dès qu'un QR est scanné. Le QR encode l'ID API. */
+    const { data: order } = useOrder(scannedId ?? undefined);
+    const collect = useCollectOrder();
+
+    /** Total déclaré par le client (somme des items de la commande). */
+    const declaredTotalPieces =
+        (order?.services ?? []).reduce(
+            (s, sv) => s + (sv.items?.reduce((ss, it) => ss + it.quantity, 0) ?? 0),
+            0,
+        ) || 0;
+
+    /** Données affichées : depuis l'API si l'ordre est chargé, sinon placeholder.
+     *  Priorité poids : actualWeight (pesée atelier déjà faite) > estimatedWeight (calcul depuis items). */
+    const client = {
+        code: order?.orderNumber ?? "—",
+        name: order?.hotelName || "Hôtel",
+        estimatedWeight: order?.actualWeight ?? order?.estimatedWeight ?? 0,
+        pieces: declaredTotalPieces,
+        stopIndex: 1,
+        stopTotal: 1,
+        geoLat: order?.pickupGeoLat,
+        geoLng: order?.pickupGeoLng,
+    };
+
+    /** Items déclarés par le client, agrégés par type. */
+    const linenItems = useMemo(() => {
+        const acc: Record<string, number> = {};
+        for (const sv of order?.services ?? []) {
+            for (const it of sv.items ?? []) {
+                acc[it.type] = (acc[it.type] ?? 0) + (it.quantity ?? 0);
+            }
+        }
+        return Object.entries(acc)
+            .filter(([, q]) => q > 0)
+            .map(([type, declared]) => ({ type, declared }));
+    }, [order]);
+
+    /** Quantités réellement reçues par le chauffeur (modifiables).
+     *  Par défaut = ce que le client a déclaré. */
+    const [receivedByType, setReceivedByType] = useState<Record<string, number>>({});
+    useEffect(() => {
+        const init: Record<string, number> = {};
+        for (const it of linenItems) init[it.type] = it.declared;
+        setReceivedByType(init);
+    }, [linenItems]);
+
+    const totalReceivedPieces = useMemo(
+        () => Object.values(receivedByType).reduce((s, n) => s + (n || 0), 0),
+        [receivedByType],
+    );
+
+    /** Catalogue API : permet d'afficher le nom réel saisi par le client
+     *  (ex: "Drap 2 personnes" au lieu du legacy "Drap" générique). */
+    const { data: apiLinens = [] } = useLinenTypes();
+    const labelByCode = useMemo(() => {
+        const m: Record<string, string> = { ...LINEN_LABEL };
+        for (const lt of apiLinens) m[lt.code] = lt.name;
+        return m;
+    }, [apiLinens]);
 
     const scanLineY = useRef(new Animated.Value(0)).current;
 
@@ -70,20 +211,51 @@ export default function CollectScreen() {
         outputRange: [-FRAME_SIZE / 2 + 12, FRAME_SIZE / 2 - 12],
     });
 
-    const handleBarcode = ({ data }: { data: string }) => {
+    const handleBarcode = ({ data, type }: { data: string; type?: string }) => {
+        console.log("[scan]", { type, data });
         if (scanned || !data) return;
         setScanned(true);
+        setScannedId(data.trim());
     };
 
-    const handleSimulate = () => setScanned(true);
-
-    const handleAddPhoto = () => setPhotosCount((n) => n + 1);
-
-    const handleSign = () => {
-        setSigned(true);
+    const handleSimulate = () => {
+        // Bascule vers le mode saisie manuelle
+        setManualMode(true);
     };
 
-    const handleValidate = () => {
+    const handleManualSubmit = () => {
+        const id = manualInput.trim();
+        if (!id) {
+            Alert.alert("Code requis", "Saisis l'ID de la commande à collecter.");
+            return;
+        }
+        setScannedId(id);
+        setScanned(true);
+        setManualMode(false);
+    };
+
+    const handleAddPhoto = async () => {
+        if (uploadingPhoto) return;
+        try {
+            const uri = await capturePhoto();
+            if (!uri) return;
+            setUploadingPhoto(true);
+            const [uploaded] = await uploadPhotos([uri]);
+            if (uploaded) setPhotoUrls((prev) => [...prev, uploaded.url]);
+        } catch (err) {
+            Alert.alert("Échec photo", err instanceof Error ? err.message : "Upload échoué.");
+        } finally {
+            setUploadingPhoto(false);
+        }
+    };
+
+    const handleSign = () => setSignaturePadOpen(true);
+
+    const handleValidate = async () => {
+        if (!scannedId) {
+            Alert.alert("Aucune commande", "Scanne un QR de commande d'abord.");
+            return;
+        }
         if (photosCount === 0 || !signed) {
             Alert.alert(
                 "Incomplet",
@@ -91,138 +263,296 @@ export default function CollectScreen() {
             );
             return;
         }
-        Alert.alert(
-            "Collecte validée",
-            `${MOCK_CLIENT.name} · ${MOCK_CLIENT.pieces} pièces · ${MOCK_CLIENT.estimatedWeight.toFixed(1).replace(".", ",")} kg`,
-            [
-                {
-                    text: "OK",
-                    onPress: () => {
-                        router.replace("/(driver)/route");
-                    },
+        try {
+            const geo = await currentPosition();
+            // Détail par type : priorité au tableau saisi par le chauffeur,
+            // fallback sur les items déclarés (si l'utilisateur valide sans avoir
+            // ouvert le panneau de vérification).
+            const fromReceived = Object.entries(receivedByType)
+                .filter(([, q]) => q > 0)
+                .map(([type, quantity]) => ({ type, quantity }));
+            const driverItemsPayload =
+                fromReceived.length > 0
+                    ? fromReceived
+                    : linenItems.map((it) => ({
+                          type: it.type,
+                          quantity: it.declared,
+                      }));
+            await collect.mutateAsync({
+                id: scannedId,
+                data: {
+                    driverWeight: Math.max(1, Math.round((client.estimatedWeight || 1) * 1000)),
+                    driverPieces: Math.max(1, totalReceivedPieces || client.pieces || 1),
+                    driverItems:
+                        driverItemsPayload.length > 0 ? driverItemsPayload : undefined,
+                    visualEstimation: "M",
+                    collectionPhotos: photoUrls,
+                    signatureUrl: signatureUrl ?? undefined,
+                    recipientName: client.name,
+                    geoLat: geo?.lat,
+                    geoLng: geo?.lng,
                 },
-            ],
-        );
+            });
+            Alert.alert(
+                "Collecte validée",
+                `${client.name} · ${client.pieces} pièces · ${client.estimatedWeight
+                    .toFixed(1)
+                    .replace(".", ",")} kg`,
+                // Retour explicite à tour-detail si on en vient (sinon back).
+                [
+                    {
+                        text: "OK",
+                        onPress: () => {
+                            if (params.roundId) {
+                                router.replace({
+                                    pathname: "/(driver)/tour-detail",
+                                    params: { roundId: params.roundId as string },
+                                });
+                            } else {
+                                router.back();
+                            }
+                        },
+                    },
+                ],
+            );
+        } catch (err) {
+            console.error("[collect]", err);
+            let message = "Erreur API lors de la collecte.";
+            if (err instanceof ApiError) {
+                message = err.message;
+                const details = err.details as
+                    | { fieldErrors?: Record<string, string[]> }
+                    | undefined;
+                const fields = details?.fieldErrors;
+                if (fields) {
+                    const lines = Object.entries(fields)
+                        .map(([k, v]) => `• ${k}: ${v.join(", ")}`)
+                        .join("\n");
+                    if (lines) message += `\n\n${lines}`;
+                }
+            } else if (err instanceof Error) {
+                message = err.message;
+            }
+            Alert.alert("Échec", message);
+        }
     };
 
-    const handleClose = () => router.back();
+    const handleClose = () => {
+        // Avec les Tabs d'expo-router, router.back() peut switcher de tab au
+        // lieu de pop le stack. On redirige explicitement vers tour-detail
+        // pour garantir le bon retour.
+        if (params.roundId) {
+            router.replace({
+                pathname: "/(driver)/tour-detail",
+                params: { roundId: params.roundId },
+            });
+        } else {
+            router.back();
+        }
+    };
 
-    return (
-        <View style={styles.root}>
-            {/* Camera feed */}
-            {permission?.granted ? (
-                <CameraView
-                    style={StyleSheet.absoluteFill}
-                    facing="back"
-                    onBarcodeScanned={scanned ? undefined : handleBarcode}
-                    barcodeScannerSettings={{
-                        barcodeTypes: ["qr", "code128", "ean13", "ean8", "upc_a"],
-                    }}
-                />
-            ) : (
+    const handlePickFromList = (orderId: string) => {
+        setMode("scan");
+        setScanned(true);
+        setScannedId(orderId);
+    };
+
+    /* ========= MODE LIST ========= */
+    if (mode === "list") {
+        return (
+            <SafeAreaView
+                edges={["top"]}
+                style={{ flex: 1, backgroundColor: colors.paper2 }}
+            >
                 <View
-                    style={[StyleSheet.absoluteFill, { backgroundColor: "#0A0A0A" }]}
-                />
-            )}
-
-            {/* Vignette */}
-            <View
-                style={[StyleSheet.absoluteFill, { backgroundColor: "#0A0A0A90" }]}
-                pointerEvents="none"
-            />
-
-            {/* Top bar */}
-            <SafeAreaView edges={["top"]} style={styles.topBar}>
-                <Pressable onPress={handleClose} style={styles.topBtn} hitSlop={8}>
-                    <Icon name="x" size={16} color="#FFF" />
-                </Pressable>
-                <Text style={styles.topTitle}>
-                    Collecte · Arrêt {MOCK_CLIENT.stopIndex}/{MOCK_CLIENT.stopTotal}
-                </Text>
-                <Pressable style={styles.topBtn} hitSlop={8}>
-                    <Icon name="spark" size={16} color="#FFF" />
-                </Pressable>
-            </SafeAreaView>
-
-            {/* Scanner frame */}
-            <View style={styles.frameArea}>
-                <View style={styles.frameWrap}>
-                    <Svg width={FRAME_SIZE} height={FRAME_SIZE} viewBox="0 0 240 240">
-                        <G
-                            stroke={colors.terra600}
-                            strokeWidth={3}
-                            fill="none"
-                            strokeLinecap="round"
+                    style={[
+                        styles.listHeader,
+                        { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
+                    ]}
+                >
+                    <View style={{ flex: 1 }}>
+                        <Text style={[styles.listTitle, { color: colors.ink900 }]}>
+                            Collectes
+                        </Text>
+                        <Text style={[styles.listSub, { color: colors.ink500 }]}>
+                            {dayFilter === "today" ? formatDayHeader() : "Toutes les collectes"}
+                        </Text>
+                    </View>
+                    <View
+                        style={[
+                            styles.countBadge,
+                            { backgroundColor: colors.brand100, borderColor: colors.brand800 },
+                        ]}
+                    >
+                        <Text
+                            style={[styles.countBadgeText, { color: colors.brand800 }]}
                         >
-                            <Path d="M8 40 L8 8 L40 8" />
-                            <Path d="M200 8 L232 8 L232 40" />
-                            <Path d="M232 200 L232 232 L200 232" />
-                            <Path d="M40 232 L8 232 L8 200" />
-                        </G>
-                        <G transform="translate(60 60)" opacity={scanned ? 0 : 0.22}>
-                            <Rect
-                                width={120}
-                                height={120}
-                                fill="none"
-                                stroke="#FFF"
-                                strokeWidth={0.5}
-                            />
-                            {Array.from({ length: 9 }).flatMap((_, r) =>
-                                Array.from({ length: 9 }).map((_, c) => {
-                                    const fill = (r * c + r) % 3 === 0;
-                                    return fill ? (
-                                        <Rect
-                                            key={`${r}-${c}`}
-                                            x={c * 13}
-                                            y={r * 13}
-                                            width={11}
-                                            height={11}
-                                            fill="#FFF"
-                                        />
-                                    ) : null;
-                                }),
-                            )}
-                        </G>
-                    </Svg>
-
-                    {!scanned && (
-                        <Animated.View
-                            style={[
-                                styles.scanLine,
-                                {
-                                    backgroundColor: colors.terra600,
-                                    transform: [{ translateY: lineTranslateY }],
-                                },
-                            ]}
-                        />
-                    )}
-
-                    {scanned && (
-                        <View
-                            style={[
-                                styles.detectedFlash,
-                                { borderColor: colors.baobab600 },
-                            ]}
-                        />
-                    )}
+                            {visibleCollects.length}
+                        </Text>
+                    </View>
                 </View>
 
-                <Text style={styles.frameLabel}>
-                    {scanned ? "QR code détecté" : "Scanne le QR de l'hôtel"}
-                </Text>
-                {!scanned && (
-                    <Pressable onPress={handleSimulate} hitSlop={8}>
-                        <Text style={styles.frameSub}>
-                            ou saisis le code manuellement
+                <View style={[styles.filterBar, { backgroundColor: colors.paper, borderBottomColor: colors.ink200 }]}>
+                    <DayChip
+                        label={`Aujourd'hui · ${collectsToday.length}`}
+                        active={dayFilter === "today"}
+                        onPress={() => setDayFilter("today")}
+                    />
+                    <DayChip
+                        label={`Toutes · ${collects.length}`}
+                        active={dayFilter === "all"}
+                        onPress={() => setDayFilter("all")}
+                    />
+                </View>
+
+                <ScrollView
+                    contentContainerStyle={styles.listContent}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {visibleCollects.length === 0 ? (
+                        <View style={styles.emptyState}>
+                            <Icon name="package" size={40} color={colors.ink400} />
+                            <Text style={[styles.emptyText, { color: colors.ink500 }]}>
+                                {dayFilter === "today"
+                                    ? "Aucune collecte pour aujourd'hui"
+                                    : "Aucune collecte"}
+                            </Text>
+                            {dayFilter === "today" && collects.length > 0 && (
+                                <Pressable onPress={() => setDayFilter("all")} hitSlop={8}>
+                                    <Text style={[styles.emptyLink, { color: colors.brand800 }]}>
+                                        Voir toutes ({collects.length})
+                                    </Text>
+                                </Pressable>
+                            )}
+                        </View>
+                    ) : (
+                        <View style={{ gap: 10 }}>
+                            {visibleCollects.map((o) => {
+                                const totalPieces = (o.services ?? []).reduce(
+                                    (s, sv) =>
+                                        s + (sv.items?.reduce((ss, it) => ss + it.quantity, 0) ?? 0),
+                                    0,
+                                );
+                                const isCollected = o.status === "collected";
+                                return (
+                                    <Pressable
+                                        key={o.id}
+                                        onPress={() => handlePickFromList(o.id)}
+                                        style={({ pressed }) => [
+                                            styles.collectItem,
+                                            {
+                                                backgroundColor: colors.paper,
+                                                borderColor: isCollected ? colors.ok600 : colors.ink200,
+                                                opacity: pressed ? 0.85 : 1,
+                                            },
+                                        ]}
+                                    >
+                                        <View style={styles.collectTop}>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={[styles.collectClient, { color: colors.ink900 }]}>
+                                                    {o.hotelName || "Hôtel"}
+                                                </Text>
+                                                <Text style={[styles.collectCode, { color: colors.ink500 }]}>
+                                                    {o.orderNumber}
+                                                </Text>
+                                            </View>
+                                            <View style={styles.collectRight}>
+                                                <Text style={[styles.collectTime, { color: colors.ink900 }]}>
+                                                    {formatHour(o.collectionPlannedAt ?? o.collectionDate)}
+                                                </Text>
+                                                {isCollected && (
+                                                    <View
+                                                        style={[
+                                                            styles.donePill,
+                                                            { backgroundColor: colors.ok100 },
+                                                        ]}
+                                                    >
+                                                        <Icon name="check" size={10} color={colors.ok700} />
+                                                        <Text style={[styles.donePillText, { color: colors.ok700 }]}>
+                                                            Collectée
+                                                        </Text>
+                                                    </View>
+                                                )}
+                                            </View>
+                                        </View>
+                                        <View style={styles.collectMetaRow}>
+                                            <Text style={[styles.collectMeta, { color: colors.ink500 }]}>
+                                                {totalPieces} pcs
+                                                {o.actualWeight ? ` · ${o.actualWeight.toFixed(1)} kg` : ""}
+                                            </Text>
+                                        </View>
+                                    </Pressable>
+                                );
+                            })}
+                        </View>
+                    )}
+                </ScrollView>
+
+                <View style={[styles.scanBar, { backgroundColor: colors.paper, borderTopColor: colors.ink200 }]}>
+                    <Pressable
+                        onPress={() => {
+                            setMode("scan");
+                            setScanned(false);
+                            setScannedId(null);
+                        }}
+                        style={[styles.scanCta, { backgroundColor: colors.brand800 }]}
+                    >
+                        <Icon name="qr" size={16} color={colors.paper} />
+                        <Text style={[styles.scanCtaText, { color: colors.paper }]}>
+                            Scanner un QR
                         </Text>
                     </Pressable>
-                )}
-            </View>
+                </View>
+            </SafeAreaView>
+        );
+    }
 
-            {/* Bottom sheet */}
-            <View style={[styles.sheet, { backgroundColor: colors.paper }]}>
-                <View style={[styles.handle, { backgroundColor: colors.ink200 }]} />
+    /* ========= MODE SCAN =========
+     * Note : le QR scanner n'est plus utilisé depuis que le chauffeur entre
+     * dans cet écran uniquement via tour-detail (orderId déjà connu).
+     * On commente toute la partie caméra/scanner et on rend la sheet en
+     * plein écran avec le formulaire de collecte directement. */
+    return (
+        <View style={[styles.root, { backgroundColor: colors.paper2 }]}>
+            {/* Top bar — bouton fermer + titre */}
+            <SafeAreaView
+                edges={["top"]}
+                style={[
+                    styles.topBarLight,
+                    {
+                        backgroundColor: colors.paper,
+                        borderBottomColor: colors.ink200,
+                    },
+                ]}
+            >
+                <Pressable
+                    onPress={handleClose}
+                    style={[styles.topBtnLight, { backgroundColor: colors.ink100 }]}
+                    hitSlop={8}
+                >
+                    <Icon name="chevLeft" size={16} color={colors.ink800} />
+                </Pressable>
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                    <Text style={[styles.topTitleLight, { color: colors.ink900 }]}>
+                        Collecte
+                    </Text>
+                    <Text style={[styles.topSubLight, { color: colors.ink500 }]}>
+                        {client.name} · {client.code}
+                    </Text>
+                </View>
+            </SafeAreaView>
 
+            {/* Sheet en plein écran avec formulaire */}
+            <View
+                style={[
+                    styles.sheetFull,
+                    { backgroundColor: colors.paper },
+                ]}
+            >
+                <ScrollView
+                    contentContainerStyle={styles.sheetScroll}
+                    showsVerticalScrollIndicator={false}
+                >
                 {scanned ? (
                     <>
                         <View style={styles.sheetTop}>
@@ -233,22 +563,52 @@ export default function CollectScreen() {
                                 <Text
                                     style={[styles.sheetName, { color: colors.ink900 }]}
                                 >
-                                    {MOCK_CLIENT.name}
+                                    {client.name}
                                 </Text>
                                 <Text
                                     style={[styles.sheetCode, { color: colors.ink500 }]}
                                 >
-                                    {MOCK_CLIENT.code}
+                                    {client.code}
                                 </Text>
                             </View>
-                            <View
-                                style={[
-                                    styles.sheetAvatar,
-                                    { backgroundColor: colors.brand100 },
-                                ]}
-                            >
-                                <Icon name="building" size={20} color={colors.brand800} />
-                            </View>
+                            {client.geoLat != null && client.geoLng != null ? (
+                                <Pressable
+                                    onPress={() =>
+                                        openMapsNavigation(
+                                            client.geoLat!,
+                                            client.geoLng!,
+                                            client.name,
+                                        )
+                                    }
+                                    hitSlop={6}
+                                    style={[
+                                        styles.sheetAvatar,
+                                        {
+                                            backgroundColor: colors.brand800,
+                                        },
+                                    ]}
+                                >
+                                    <Icon
+                                        name="navigate"
+                                        size={20}
+                                        color={colors.paper}
+                                        stroke={2}
+                                    />
+                                </Pressable>
+                            ) : (
+                                <View
+                                    style={[
+                                        styles.sheetAvatar,
+                                        { backgroundColor: colors.brand100 },
+                                    ]}
+                                >
+                                    <Icon
+                                        name="building"
+                                        size={20}
+                                        color={colors.brand800}
+                                    />
+                                </View>
+                            )}
                         </View>
 
                         <View style={styles.tilesRow}>
@@ -270,7 +630,7 @@ export default function CollectScreen() {
                                 <Text
                                     style={[styles.tileValue, { color: colors.ink900 }]}
                                 >
-                                    {MOCK_CLIENT.estimatedWeight.toFixed(1).replace(".", ",")}
+                                    {client.estimatedWeight.toFixed(1).replace(".", ",")}
                                     <Text
                                         style={[styles.tileUnit, { color: colors.ink500 }]}
                                     >
@@ -293,10 +653,171 @@ export default function CollectScreen() {
                                 <Text
                                     style={[styles.tileValue, { color: colors.ink900 }]}
                                 >
-                                    {MOCK_CLIENT.pieces}
+                                    {client.pieces}
                                 </Text>
                             </View>
                         </View>
+
+                        {linenItems.length > 0 && (
+                            <View
+                                style={[
+                                    styles.itemsBox,
+                                    {
+                                        backgroundColor: colors.paper,
+                                        borderColor: colors.ink200,
+                                    },
+                                ]}
+                            >
+                                <Pressable
+                                    onPress={() => setShowItemsDetail((v) => !v)}
+                                    style={styles.itemsToggle}
+                                    hitSlop={6}
+                                >
+                                    <View style={{ flex: 1, minWidth: 0 }}>
+                                        <Text
+                                            style={[
+                                                styles.itemsCaps,
+                                                { color: colors.ink700 },
+                                            ]}
+                                        >
+                                            Vérifier les pièces · reçu{" "}
+                                            {totalReceivedPieces} / annoncé{" "}
+                                            {linenItems.reduce(
+                                                (s, it) => s + it.declared,
+                                                0,
+                                            )}
+                                        </Text>
+                                    </View>
+                                    <Icon
+                                        name={showItemsDetail ? "chevDown" : "chevRight"}
+                                        size={14}
+                                        color={colors.ink600}
+                                        stroke={2}
+                                    />
+                                </Pressable>
+                                {showItemsDetail && (
+                                    <View style={[styles.itemsList, { marginTop: 8 }]}>
+                                        {linenItems.map((it) => {
+                                            const received = receivedByType[it.type] ?? it.declared;
+                                            const diff = received - it.declared;
+                                            return (
+                                                <View key={it.type} style={styles.itemRowEdit}>
+                                                    <View style={{ flex: 1, minWidth: 0 }}>
+                                                        <Text
+                                                            style={[
+                                                                styles.itemLabel,
+                                                                { color: colors.ink800 },
+                                                            ]}
+                                                            numberOfLines={1}
+                                                        >
+                                                            {labelByCode[it.type] ?? it.type}
+                                                        </Text>
+                                                        <Text
+                                                            style={[
+                                                                styles.itemSub,
+                                                                {
+                                                                    color:
+                                                                        diff === 0
+                                                                            ? colors.ink500
+                                                                            : diff > 0
+                                                                              ? colors.ok700
+                                                                              : colors.danger600,
+                                                                },
+                                                            ]}
+                                                        >
+                                                            Annoncé {it.declared}
+                                                            {diff !== 0
+                                                                ? ` · ${diff > 0 ? "+" : ""}${diff}`
+                                                                : ""}
+                                                        </Text>
+                                                    </View>
+                                                    <View style={styles.qtyStepper}>
+                                                        <Pressable
+                                                            onPress={() =>
+                                                                setReceivedByType((prev) => ({
+                                                                    ...prev,
+                                                                    [it.type]: Math.max(
+                                                                        0,
+                                                                        (prev[it.type] ?? it.declared) - 1,
+                                                                    ),
+                                                                }))
+                                                            }
+                                                            hitSlop={6}
+                                                            style={[
+                                                                styles.qtyBtn,
+                                                                {
+                                                                    backgroundColor: colors.paper2,
+                                                                    borderColor: colors.ink200,
+                                                                },
+                                                            ]}
+                                                        >
+                                                            <Icon
+                                                                name="minus"
+                                                                size={12}
+                                                                color={colors.ink800}
+                                                                stroke={2.2}
+                                                            />
+                                                        </Pressable>
+                                                        <TextInput
+                                                            value={String(received)}
+                                                            onChangeText={(txt) => {
+                                                                const n =
+                                                                    parseInt(
+                                                                        txt.replace(/[^0-9]/g, ""),
+                                                                        10,
+                                                                    ) || 0;
+                                                                setReceivedByType((prev) => ({
+                                                                    ...prev,
+                                                                    [it.type]: Math.max(
+                                                                        0,
+                                                                        Math.min(9999, n),
+                                                                    ),
+                                                                }));
+                                                            }}
+                                                            keyboardType="number-pad"
+                                                            selectTextOnFocus
+                                                            style={[
+                                                                styles.qtyInput,
+                                                                {
+                                                                    color: colors.ink900,
+                                                                    borderColor:
+                                                                        diff === 0
+                                                                            ? colors.ink300
+                                                                            : colors.brand800,
+                                                                },
+                                                            ]}
+                                                        />
+                                                        <Pressable
+                                                            onPress={() =>
+                                                                setReceivedByType((prev) => ({
+                                                                    ...prev,
+                                                                    [it.type]: Math.min(
+                                                                        9999,
+                                                                        (prev[it.type] ?? it.declared) + 1,
+                                                                    ),
+                                                                }))
+                                                            }
+                                                            hitSlop={6}
+                                                            style={[
+                                                                styles.qtyBtn,
+                                                                { backgroundColor: colors.brand800 },
+                                                            ]}
+                                                        >
+                                                            <Icon
+                                                                name="plus"
+                                                                size={12}
+                                                                color={colors.paper}
+                                                                stroke={2.2}
+                                                            />
+                                                        </Pressable>
+                                                    </View>
+                                                </View>
+                                            );
+                                        })}
+                                    </View>
+                                )}
+                            </View>
+                        )}
 
                         <View style={styles.miniRow}>
                             <Pressable
@@ -414,30 +935,263 @@ export default function CollectScreen() {
                             </Pressable>
                         )}
 
-                        <Pressable
-                            onPress={handleSimulate}
-                            style={[
-                                styles.manualBtn,
-                                {
-                                    backgroundColor: colors.paper2,
-                                    borderColor: colors.ink200,
-                                },
-                            ]}
-                        >
-                            <Icon name="qr" size={14} color={colors.ink700} />
-                            <Text style={[styles.manualText, { color: colors.ink700 }]}>
-                                Simuler un scan
-                            </Text>
-                        </Pressable>
+                        {manualMode ? (
+                            <View style={styles.manualWrap}>
+                                <TextInput
+                                    value={manualInput}
+                                    onChangeText={setManualInput}
+                                    placeholder="ID de la commande (ex: cmoeef…)"
+                                    placeholderTextColor={colors.ink400}
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                    style={[
+                                        styles.manualInput,
+                                        {
+                                            backgroundColor: colors.paper2,
+                                            color: colors.ink900,
+                                            borderColor: colors.ink200,
+                                        },
+                                    ]}
+                                />
+                                <Pressable
+                                    onPress={handleManualSubmit}
+                                    style={[
+                                        styles.manualSubmit,
+                                        { backgroundColor: colors.brand800 },
+                                    ]}
+                                >
+                                    <Text style={[styles.validateText, { color: colors.paper }]}>
+                                        Charger
+                                    </Text>
+                                </Pressable>
+                            </View>
+                        ) : (
+                            <Pressable
+                                onPress={handleSimulate}
+                                style={[
+                                    styles.manualBtn,
+                                    {
+                                        backgroundColor: colors.paper2,
+                                        borderColor: colors.ink200,
+                                    },
+                                ]}
+                            >
+                                <Icon name="qr" size={14} color={colors.ink700} />
+                                <Text style={[styles.manualText, { color: colors.ink700 }]}>
+                                    Saisir le code manuellement
+                                </Text>
+                            </Pressable>
+                        )}
                     </>
                 )}
+                </ScrollView>
             </View>
+
+            <SignaturePad
+                visible={signaturePadOpen}
+                onClose={() => setSignaturePadOpen(false)}
+                onSign={(url) => setSignatureUrl(url)}
+                title={`Signature client · ${client.code}`}
+            />
         </View>
     );
 }
 
+function DayChip({
+    label,
+    active,
+    onPress,
+}: {
+    label: string;
+    active: boolean;
+    onPress: () => void;
+}) {
+    const colors = useThemeColors();
+    return (
+        <Pressable
+            onPress={onPress}
+            style={[
+                styles.dayChip,
+                {
+                    backgroundColor: active ? colors.brand800 : colors.paper2,
+                    borderColor: active ? colors.brand800 : colors.ink200,
+                },
+            ]}
+        >
+            <Text
+                style={[
+                    styles.dayChipText,
+                    { color: active ? colors.paper : colors.ink700 },
+                ]}
+            >
+                {label}
+            </Text>
+        </Pressable>
+    );
+}
+
 const styles = StyleSheet.create({
-    root: { flex: 1, backgroundColor: "#0A0A0A" },
+    root: { flex: 1 },
+
+    /* Top bar light (mode plein écran sans caméra) */
+    topBarLight: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    topBtnLight: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    topTitleLight: {
+        fontFamily: FontFamily.serifMedium,
+        fontSize: 17,
+        letterSpacing: -0.3,
+    },
+    topSubLight: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 1,
+    },
+
+    /* Sheet en plein écran (remplace l'ancienne bottom sheet) */
+    sheetFull: {
+        flex: 1,
+    },
+    sheetScroll: {
+        padding: 16,
+        paddingBottom: 40,
+    },
+
+    /* List mode */
+    listHeader: {
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        flexDirection: "row",
+        alignItems: "center",
+    },
+    listTitle: {
+        fontFamily: FontFamily.serifMedium,
+        fontSize: 22,
+        letterSpacing: -0.3,
+    },
+    listSub: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
+        marginTop: 2,
+        textTransform: "capitalize",
+    },
+    countBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 3,
+        borderRadius: 999,
+        borderWidth: StyleSheet.hairlineWidth,
+    },
+    countBadgeText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.tiny,
+    },
+    filterBar: {
+        flexDirection: "row",
+        gap: 8,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    dayChip: {
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 999,
+        borderWidth: StyleSheet.hairlineWidth,
+    },
+    dayChipText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.tiny,
+    },
+    listContent: { padding: 16, paddingBottom: 100 },
+    emptyState: {
+        alignItems: "center",
+        justifyContent: "center",
+        paddingVertical: 60,
+        gap: 12,
+    },
+    emptyText: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.sm,
+    },
+    emptyLink: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.tiny,
+        textDecorationLine: "underline",
+    },
+    collectItem: {
+        borderRadius: 14,
+        borderWidth: StyleSheet.hairlineWidth,
+        padding: 14,
+        gap: 8,
+    },
+    collectTop: { flexDirection: "row", alignItems: "center", gap: 12 },
+    collectClient: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.md,
+    },
+    collectCode: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 2,
+    },
+    collectRight: { alignItems: "flex-end", gap: 6 },
+    collectTime: {
+        fontFamily: FontFamily.serifMedium,
+        fontSize: 16,
+    },
+    donePill: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 999,
+    },
+    donePillText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.micro,
+    },
+    collectMetaRow: { flexDirection: "row", gap: 12 },
+    collectMeta: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.tiny,
+    },
+    scanBar: {
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        paddingHorizontal: 16,
+        paddingTop: 12,
+        paddingBottom: 24,
+        borderTopWidth: StyleSheet.hairlineWidth,
+    },
+    scanCta: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        paddingVertical: 14,
+        borderRadius: 12,
+    },
+    scanCtaText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.base,
+    },
+
 
     topBar: {
         position: "absolute",
@@ -463,6 +1217,12 @@ const styles = StyleSheet.create({
         fontFamily: FontFamily.uiMedium,
         fontSize: Typography.fontSize.sm,
         color: "#FFF",
+    },
+    topStatus: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
+        color: "rgba(255,255,255,0.6)",
+        marginTop: 2,
     },
 
     frameArea: {
@@ -558,6 +1318,74 @@ const styles = StyleSheet.create({
     },
 
     tilesRow: { flexDirection: "row", gap: 10, marginBottom: 12 },
+    itemsBox: {
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 12,
+        borderWidth: StyleSheet.hairlineWidth,
+        marginBottom: 12,
+    },
+    itemsToggle: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+    },
+    itemsCaps: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.micro,
+        letterSpacing: 1.2,
+        textTransform: "uppercase",
+    },
+    itemsList: { gap: 4 },
+    itemRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        paddingVertical: 4,
+    },
+    itemRowEdit: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        paddingVertical: 6,
+    },
+    itemSub: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
+        marginTop: 1,
+    },
+    qtyStepper: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+    },
+    qtyBtn: {
+        width: 26,
+        height: 26,
+        borderRadius: 7,
+        alignItems: "center",
+        justifyContent: "center",
+        borderWidth: StyleSheet.hairlineWidth,
+    },
+    qtyInput: {
+        minWidth: 44,
+        height: 26,
+        paddingHorizontal: 6,
+        textAlign: "center",
+        fontFamily: FontFamily.monoMedium,
+        fontSize: Typography.fontSize.sm,
+        borderRadius: 7,
+        borderWidth: 1,
+        padding: 0,
+    },
+    itemLabel: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.sm,
+    },
+    itemQty: {
+        fontFamily: FontFamily.monoMedium,
+        fontSize: Typography.fontSize.sm,
+    },
     tile: {
         flex: 1,
         padding: 12,
@@ -649,5 +1477,24 @@ const styles = StyleSheet.create({
     manualText: {
         fontFamily: FontFamily.uiSemibold,
         fontSize: Typography.fontSize.sm,
+    },
+    manualWrap: {
+        flexDirection: "row",
+        gap: 8,
+        alignItems: "center",
+    },
+    manualInput: {
+        flex: 1,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 10,
+        borderWidth: StyleSheet.hairlineWidth,
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.tiny,
+    },
+    manualSubmit: {
+        paddingHorizontal: 16,
+        paddingVertical: 11,
+        borderRadius: 10,
     },
 });

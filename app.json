@@ -38,7 +38,21 @@
         {
           "cameraPermission": "Autorise Blanchisserie SN à accéder à ta caméra pour scanner les QR codes clients."
         }
-      ]
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Autorise Blanchisserie SN à prendre des photos des colis lors des collectes et livraisons."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Autorise Blanchisserie SN à utiliser ta position pour traçabilité des collectes/livraisons."
+        }
+      ],
+      "expo-secure-store",
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "router": {},

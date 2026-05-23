@@ -1,12 +1,14 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
     Pressable,
+    RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from "react-native";
+import { useQueryClient } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
@@ -15,11 +17,13 @@ import Icon, { IconName } from "@/components/ui/Icon";
 import StatusBadge, { OrderStatus } from "@/components/ui/StatusBadge";
 import ThemedText from "@/components/ui/ThemedText";
 import DrawerMenu from "@/components/shared/DrawerMenu";
+import { NotificationBell } from "@/components/shared/NotificationBell";
+import { NotificationsModal } from "@/components/shared/NotificationsModal";
 import { FontFamily, Typography } from "@/constants/Typography";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrder } from "@/contexts/OrderContext";
 import { useThemeColors } from "@/hooks/useThemeColors";
-import { mockInvoices } from "@/data/mock-invoices";
+import { useInvoices, useInvoicesRealtime } from "@/hooks/useInvoices";
 import type { Order } from "@/types/order.types";
 
 const STATUS_TO_LABEL: Record<Order["status"], OrderStatus> = {
@@ -63,7 +67,19 @@ export default function HotelDashboard() {
     const { user } = useAuth();
     const { orders } = useOrder();
     const colors = useThemeColors();
+    const qc = useQueryClient();
+    const [refreshing, setRefreshing] = useState(false);
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try {
+            await qc.invalidateQueries({ queryKey: ["orders"] });
+        } finally {
+            setRefreshing(false);
+        }
+    }, [qc]);
     const [drawerVisible, setDrawerVisible] = useState(false);
+    const [notifsOpen, setNotifsOpen] = useState(false);
 
     const greetingName = useMemo(
         () => (user?.name ?? "").split(" ")[0] || "Bienvenue",
@@ -77,7 +93,9 @@ export default function HotelDashboard() {
         (o) => o.status === "in_progress" || o.status === "collected",
     ).length;
 
-    const monthlyAmount = mockInvoices.reduce((sum, i) => sum + i.total, 0);
+    useInvoicesRealtime();
+    const { data: hotelInvoices } = useInvoices(user?.clientId ?? undefined);
+    const monthlyAmount = (hotelInvoices ?? []).reduce((sum, i) => sum + i.total, 0);
     const monthlyWeight = orders.reduce(
         (sum, o) => sum + (o.actualWeight ?? countItems(o) * 0.3),
         0,
@@ -117,15 +135,20 @@ export default function HotelDashboard() {
                         {user?.name ?? "Votre espace pro"}
                     </ThemedText>
                 </View>
-                <Pressable style={[styles.iconChip, { backgroundColor: colors.ink100 }]} hitSlop={6}>
-                    <Icon name="bell" size={16} color={colors.ink700} />
-                    <View style={[styles.notifDot, { backgroundColor: colors.terra600 }]} />
-                </Pressable>
+                <NotificationBell onPress={() => setNotifsOpen(true)} color={colors.ink700} />
             </View>
 
             <ScrollView
                 style={{ flex: 1 }}
                 contentContainerStyle={styles.content}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor={colors.brand800}
+                        colors={[colors.brand800]}
+                    />
+                }
                 showsVerticalScrollIndicator={false}
             >
                 {/* Hero stat */}
@@ -206,18 +229,6 @@ export default function HotelDashboard() {
                         <Icon name="plus" size={18} color={colors.paper} stroke={2} />
                         <Text style={[styles.primaryActionText, { color: colors.paper }]}>
                             Nouvelle commande
-                        </Text>
-                    </Pressable>
-                    <Pressable
-                        onPress={() => router.push("/(hotel)/planning")}
-                        style={[
-                            styles.secondaryAction,
-                            { backgroundColor: colors.paper, borderColor: colors.ink200 },
-                        ]}
-                    >
-                        <Icon name="calendar" size={16} color={colors.ink700} />
-                        <Text style={[styles.secondaryActionText, { color: colors.ink800 }]}>
-                            Planifier
                         </Text>
                     </Pressable>
                     <Pressable
@@ -318,6 +329,10 @@ export default function HotelDashboard() {
             <DrawerMenu
                 visible={drawerVisible}
                 onClose={() => setDrawerVisible(false)}
+            />
+            <NotificationsModal
+                visible={notifsOpen}
+                onClose={() => setNotifsOpen(false)}
             />
         </SafeAreaView>
     );

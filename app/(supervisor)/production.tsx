@@ -1,32 +1,35 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
     Alert,
     Pressable,
     ScrollView,
     StyleSheet,
     Text,
-    TextInput,
     View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
 
 import Card from "@/components/ui/Card";
 import Icon, { IconName } from "@/components/ui/Icon";
 import StatusBadge from "@/components/ui/StatusBadge";
 import ThemedText from "@/components/ui/ThemedText";
+import { NotificationBell } from "@/components/shared/NotificationBell";
+import { NotificationsModal } from "@/components/shared/NotificationsModal";
 import { FontFamily, Typography } from "@/constants/Typography";
 import { useThemeColors } from "@/hooks/useThemeColors";
+import { useOrders } from "@/hooks/useOrders";
+import { useOrdersRealtime } from "@/hooks/useOrdersRealtime";
 
-type WorkflowStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+type WorkflowStep = 1 | 2 | 3 | 4 | 5;
 
 const WORKFLOW: { step: WorkflowStep; label: string; icon: IconName }[] = [
     { step: 1, label: "Commandes", icon: "boxes" },
-    { step: 2, label: "Pesée", icon: "weight" },
-    { step: 3, label: "Vérification", icon: "check" },
-    { step: 4, label: "Lavage", icon: "droplet" },
-    { step: 5, label: "Séchage", icon: "thermo" },
-    { step: 6, label: "Calandrage", icon: "spark" },
-    { step: 7, label: "Préparation", icon: "list" },
+    { step: 2, label: "Lavage", icon: "droplet" },
+    { step: 3, label: "Séchage", icon: "thermo" },
+    { step: 4, label: "Calandrage", icon: "spark" },
+    { step: 5, label: "Préparation", icon: "list" },
 ];
 
 const formatCurrency = (n: number) => `${n.toLocaleString("fr-FR")} F CFA`;
@@ -34,6 +37,8 @@ const formatCurrency = (n: number) => `${n.toLocaleString("fr-FR")} F CFA`;
 export default function SupervisorProductionScreen() {
     const colors = useThemeColors();
     const [currentStep, setCurrentStep] = useState<WorkflowStep>(1);
+    const [notifsOpen, setNotifsOpen] = useState(false);
+    useOrdersRealtime();
 
     return (
         <SafeAreaView
@@ -46,10 +51,13 @@ export default function SupervisorProductionScreen() {
                     { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
                 ]}
             >
-                <ThemedText variate="title">Production</ThemedText>
-                <Text style={[styles.headerSub, { color: colors.ink500 }]}>
-                    Atelier Dakar · Cycle du jour
-                </Text>
+                <View style={{ flex: 1 }}>
+                    <ThemedText variate="title">Production</ThemedText>
+                    <Text style={[styles.headerSub, { color: colors.ink500 }]}>
+                        Atelier Dakar · Cycle du jour
+                    </Text>
+                </View>
+                <NotificationBell onPress={() => setNotifsOpen(true)} />
             </View>
 
             {/* Stepper */}
@@ -143,42 +151,34 @@ export default function SupervisorProductionScreen() {
                     <CommandesStep onNext={() => setCurrentStep(2)} />
                 )}
                 {currentStep === 2 && (
-                    <PeseeStep
+                    <DispatchStep
+                        kind="lavage"
                         onNext={() => setCurrentStep(3)}
                         onBack={() => setCurrentStep(1)}
                     />
                 )}
                 {currentStep === 3 && (
-                    <VerificationStep
+                    <DispatchStep
+                        kind="sechage"
                         onNext={() => setCurrentStep(4)}
                         onBack={() => setCurrentStep(2)}
                     />
                 )}
                 {currentStep === 4 && (
                     <DispatchStep
-                        kind="lavage"
+                        kind="calandrage"
                         onNext={() => setCurrentStep(5)}
                         onBack={() => setCurrentStep(3)}
                     />
                 )}
                 {currentStep === 5 && (
-                    <DispatchStep
-                        kind="sechage"
-                        onNext={() => setCurrentStep(6)}
-                        onBack={() => setCurrentStep(4)}
-                    />
-                )}
-                {currentStep === 6 && (
-                    <DispatchStep
-                        kind="calandrage"
-                        onNext={() => setCurrentStep(7)}
-                        onBack={() => setCurrentStep(5)}
-                    />
-                )}
-                {currentStep === 7 && (
-                    <PreparationStep onBack={() => setCurrentStep(6)} />
+                    <PreparationStep onBack={() => setCurrentStep(4)} />
                 )}
             </ScrollView>
+            <NotificationsModal
+                visible={notifsOpen}
+                onClose={() => setNotifsOpen(false)}
+            />
         </SafeAreaView>
     );
 }
@@ -188,12 +188,15 @@ export default function SupervisorProductionScreen() {
 function CommandesStep({ onNext }: { onNext: () => void }) {
     const colors = useThemeColors();
     const [selected, setSelected] = useState<string[]>([]);
+    const { data: allOrders = [], isLoading } = useOrders();
 
-    const orders = [
-        { id: "1", client: "Hôtel Plaza", items: 130, weight: "67,5 kg", date: "04/01/2026" },
-        { id: "2", client: "Hôtel Savana", items: 53, weight: "42,8 kg", date: "04/01/2026" },
-        { id: "3", client: "Hôtel Teranga", items: 235, weight: "157 kg", date: "04/01/2026" },
-    ];
+    /** Production démarrable uniquement sur commandes déjà pesées (received) ET triées (triaged).
+     *  Côté API : apiStatus === 'triaged' = pesée atelier faite + triage validé.
+     *  Les statuts antérieurs (collected, received) → non éligibles. */
+    const readyOrders = useMemo(
+        () => allOrders.filter((o) => o.apiStatus === "triaged"),
+        [allOrders],
+    );
 
     const toggle = (id: string) =>
         setSelected((prev) =>
@@ -205,61 +208,116 @@ function CommandesStep({ onNext }: { onNext: () => void }) {
             <StepHeader
                 caps="Étape 1 · Commandes"
                 title="Sélection des commandes"
-                subtitle="Commandes collectées à intégrer dans le cycle du jour"
+                subtitle="Commandes pesées et triées prêtes pour la production"
             />
 
-            <View style={{ gap: 10, marginTop: 14 }}>
-                {orders.map((o) => {
-                    const picked = selected.includes(o.id);
-                    return (
-                        <Pressable
-                            key={o.id}
-                            onPress={() => toggle(o.id)}
-                            style={[
-                                styles.pickRow,
-                                {
-                                    backgroundColor: picked ? colors.brand100 : colors.paper,
-                                    borderColor: picked ? colors.brand800 : colors.ink200,
-                                    borderWidth: picked ? 1.5 : StyleSheet.hairlineWidth,
-                                },
-                            ]}
-                        >
-                            <View
+            {isLoading ? (
+                <View style={{ paddingVertical: 40, alignItems: "center" }}>
+                    <Text style={{ color: colors.ink500, fontFamily: FontFamily.uiRegular }}>
+                        Chargement…
+                    </Text>
+                </View>
+            ) : readyOrders.length === 0 ? (
+                <Card
+                    padding={20}
+                    style={{
+                        marginTop: 14,
+                        backgroundColor: colors.paper2,
+                        borderColor: colors.ink200,
+                        alignItems: "center",
+                    }}
+                >
+                    <Icon name="boxes" size={28} color={colors.ink400} />
+                    <Text
+                        style={{
+                            marginTop: 10,
+                            fontFamily: FontFamily.uiSemibold,
+                            fontSize: Typography.fontSize.sm,
+                            color: colors.ink800,
+                            textAlign: "center",
+                        }}
+                    >
+                        Aucune commande prête
+                    </Text>
+                    <Text
+                        style={{
+                            marginTop: 4,
+                            fontFamily: FontFamily.uiRegular,
+                            fontSize: Typography.fontSize.tiny,
+                            color: colors.ink500,
+                            textAlign: "center",
+                        }}
+                    >
+                        La production ne peut démarrer qu'une fois les commandes pesées et triées par l'atelier.
+                    </Text>
+                </Card>
+            ) : (
+                <View style={{ gap: 10, marginTop: 14 }}>
+                    {readyOrders.map((o) => {
+                        const picked = selected.includes(o.id);
+                        const totalPieces =
+                            o.services?.reduce(
+                                (s, sv) =>
+                                    s + (sv.items?.reduce((ss, it) => ss + it.quantity, 0) ?? 0),
+                                0,
+                            ) ?? 0;
+                        const kg = o.actualWeight ?? o.estimatedWeight;
+                        const collectedAt = o.collectionDate
+                            ? format(new Date(o.collectionDate), "d MMM", { locale: fr })
+                            : "—";
+                        return (
+                            <Pressable
+                                key={o.id}
+                                onPress={() => toggle(o.id)}
                                 style={[
-                                    styles.checkbox,
+                                    styles.pickRow,
                                     {
-                                        backgroundColor: picked
-                                            ? colors.brand800
-                                            : "transparent",
-                                        borderColor: picked ? colors.brand800 : colors.ink300,
+                                        backgroundColor: picked ? colors.brand100 : colors.paper,
+                                        borderColor: picked ? colors.brand800 : colors.ink200,
+                                        borderWidth: picked ? 1.5 : StyleSheet.hairlineWidth,
                                     },
                                 ]}
                             >
-                                {picked && (
-                                    <Icon name="check" size={12} color={colors.paper} />
-                                )}
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text
-                                    style={[styles.pickClient, { color: colors.ink900 }]}
+                                <View
+                                    style={[
+                                        styles.checkbox,
+                                        {
+                                            backgroundColor: picked
+                                                ? colors.brand800
+                                                : "transparent",
+                                            borderColor: picked ? colors.brand800 : colors.ink300,
+                                        },
+                                    ]}
                                 >
-                                    {o.client}
-                                </Text>
-                                <Text
-                                    style={[styles.pickMeta, { color: colors.ink500 }]}
-                                >
-                                    {o.items} pièces · {o.weight} · {o.date}
-                                </Text>
-                            </View>
-                            <Icon
-                                name="building"
-                                size={16}
-                                color={picked ? colors.brand800 : colors.ink500}
-                            />
-                        </Pressable>
-                    );
-                })}
-            </View>
+                                    {picked && (
+                                        <Icon name="check" size={12} color={colors.paper} />
+                                    )}
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text
+                                        style={[styles.pickClient, { color: colors.ink900 }]}
+                                    >
+                                        {o.hotelName}
+                                    </Text>
+                                    <Text
+                                        style={[styles.pickMeta, { color: colors.ink500 }]}
+                                    >
+                                        {o.orderNumber} · {totalPieces} pièces
+                                        {kg != null ? ` · ${kg.toFixed(1).replace(".", ",")} kg` : ""}
+                                        {" · "}
+                                        {collectedAt}
+                                    </Text>
+                                </View>
+                                <Icon
+                                    name="building"
+                                    size={16}
+                                    color={picked ? colors.brand800 : colors.ink500}
+                                />
+                            </Pressable>
+                        );
+                    })}
+                </View>
+            )}
 
             <CtaRow
                 nextLabel={`Continuer · ${selected.length} sélectionnée${selected.length > 1 ? "s" : ""}`}
@@ -270,246 +328,7 @@ function CommandesStep({ onNext }: { onNext: () => void }) {
     );
 }
 
-/* ---------- STEP 2 : PESÉE ---------- */
-
-function PeseeStep({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
-    const colors = useThemeColors();
-    const initial = [
-        { type: "Drap", quantity: 45, weight: 18.5 },
-        { type: "Taie", quantity: 30, weight: 6.2 },
-        { type: "Serviette", quantity: 35, weight: 21.0 },
-        { type: "Nappe", quantity: 15, weight: 19.0 },
-        { type: "Torchon", quantity: 5, weight: 2.8 },
-    ];
-    const [items, setItems] = useState(initial);
-
-    const updateWeight = (index: number, v: string) => {
-        setItems((prev) => {
-            const next = [...prev];
-            next[index] = { ...next[index], weight: parseFloat(v.replace(",", ".")) || 0 };
-            return next;
-        });
-    };
-
-    const totalWeight = items.reduce((s, i) => s + i.weight, 0);
-    const totalPieces = items.reduce((s, i) => s + i.quantity, 0);
-
-    return (
-        <>
-            <StepHeader
-                caps="Étape 2 · Pesée"
-                title="Pesée par type de linge"
-                subtitle="Relevez le poids réel de chaque catégorie"
-            />
-
-            {/* Client context */}
-            <Card
-                padding={14}
-                style={[
-                    styles.clientCtx,
-                    { backgroundColor: colors.brand100, borderColor: colors.brand100 },
-                ]}
-            >
-                <View style={styles.clientCtxRow}>
-                    <Icon name="building" size={14} color={colors.brand800} />
-                    <Text style={[styles.clientCtxName, { color: colors.ink900 }]}>
-                        Hôtel Plaza
-                    </Text>
-                </View>
-                <Text style={[styles.clientCtxSub, { color: colors.ink700 }]}>
-                    CMD-2026-001 · {totalPieces} pièces à peser
-                </Text>
-            </Card>
-
-            <Card padding={0} style={{ overflow: "hidden", marginBottom: 14 }}>
-                {items.map((item, i) => (
-                    <View
-                        key={item.type}
-                        style={[
-                            styles.weighingRow,
-                            i < items.length - 1 && {
-                                borderBottomColor: colors.ink200,
-                                borderBottomWidth: StyleSheet.hairlineWidth,
-                            },
-                        ]}
-                    >
-                        <View style={{ flex: 1 }}>
-                            <Text style={[styles.weighType, { color: colors.ink900 }]}>
-                                {item.type}
-                            </Text>
-                            <Text style={[styles.weighQty, { color: colors.ink500 }]}>
-                                {item.quantity} pièces
-                            </Text>
-                        </View>
-                        <View
-                            style={[
-                                styles.weighInput,
-                                {
-                                    backgroundColor: colors.paper,
-                                    borderColor: colors.brand800,
-                                },
-                            ]}
-                        >
-                            <TextInput
-                                value={item.weight > 0 ? item.weight.toString() : ""}
-                                onChangeText={(v) => updateWeight(i, v)}
-                                keyboardType="decimal-pad"
-                                placeholder="0,0"
-                                placeholderTextColor={colors.ink400}
-                                style={[styles.weighInputText, { color: colors.ink900 }]}
-                            />
-                            <Text style={[styles.weighUnit, { color: colors.ink500 }]}>
-                                kg
-                            </Text>
-                        </View>
-                    </View>
-                ))}
-            </Card>
-
-            {/* Total card */}
-            <Card
-                padding={16}
-                style={[
-                    styles.totalCard,
-                    { backgroundColor: colors.brand900, borderColor: colors.brand900 },
-                ]}
-            >
-                <View style={{ flex: 1 }}>
-                    <Text style={[styles.totalCaps, { color: colors.brand100 }]}>
-                        Poids total relevé
-                    </Text>
-                    <Text style={[styles.totalPieces, { color: colors.brand100 }]}>
-                        {totalPieces} pièces
-                    </Text>
-                </View>
-                <Text style={[styles.totalValue, { color: colors.paper }]}>
-                    {totalWeight.toFixed(1)}
-                    <Text style={[styles.totalUnit, { color: colors.brand100 }]}>
-                        {" kg"}
-                    </Text>
-                </Text>
-            </Card>
-
-            <CtaRow nextLabel="Valider & continuer" onNext={onNext} onBack={onBack} />
-        </>
-    );
-}
-
-/* ---------- STEP 3 : VÉRIFICATION ---------- */
-
-function VerificationStep({
-    onNext,
-    onBack,
-}: {
-    onNext: () => void;
-    onBack: () => void;
-}) {
-    const colors = useThemeColors();
-    const items = [
-        { type: "Drap", quantity: 45, weight: 18.5, category: "Linge plat", ok: true },
-        { type: "Taie", quantity: 30, weight: 6.2, category: "Linge plat", ok: true },
-        { type: "Serviette", quantity: 35, weight: 21.0, category: "Linge plat", ok: true },
-        { type: "Nappe", quantity: 15, weight: 19.0, category: "Linge plat", ok: true },
-        { type: "Torchon", quantity: 5, weight: 2.8, category: "Linge forme", ok: true },
-    ];
-    const totalWeight = items.reduce((s, i) => s + i.weight, 0);
-    const totalQty = items.reduce((s, i) => s + i.quantity, 0);
-
-    return (
-        <>
-            <StepHeader
-                caps="Étape 3 · Vérification"
-                title="Vérification du triage"
-                subtitle="Confirmez que le tri de l'hôtel correspond à la réalité"
-            />
-
-            <Card
-                padding={14}
-                style={[
-                    styles.clientCtx,
-                    { backgroundColor: colors.brand100, borderColor: colors.brand100 },
-                ]}
-            >
-                <View style={styles.clientCtxRow}>
-                    <Icon name="building" size={14} color={colors.brand800} />
-                    <Text style={[styles.clientCtxName, { color: colors.ink900 }]}>
-                        Hôtel Plaza
-                    </Text>
-                </View>
-                <Text style={[styles.clientCtxSub, { color: colors.ink700 }]}>
-                    {totalWeight.toFixed(1)} kg pesés · {totalQty} pièces
-                </Text>
-            </Card>
-
-            <Card padding={0} style={{ overflow: "hidden", marginBottom: 14 }}>
-                {items.map((it, i) => (
-                    <View
-                        key={it.type}
-                        style={[
-                            styles.verifyRow,
-                            i < items.length - 1 && {
-                                borderBottomColor: colors.ink200,
-                                borderBottomWidth: StyleSheet.hairlineWidth,
-                            },
-                        ]}
-                    >
-                        <View style={{ flex: 1 }}>
-                            <Text style={[styles.weighType, { color: colors.ink900 }]}>
-                                {it.type}
-                            </Text>
-                            <Text
-                                style={[styles.weighQty, { color: colors.ink500 }]}
-                            >
-                                {it.category}
-                            </Text>
-                        </View>
-                        <View style={{ alignItems: "flex-end", marginRight: 12 }}>
-                            <Text
-                                style={[styles.verifyQty, { color: colors.ink900 }]}
-                            >
-                                {it.quantity} pcs
-                            </Text>
-                            <Text
-                                style={[styles.verifyWeight, { color: colors.ink500 }]}
-                            >
-                                {it.weight.toFixed(1)} kg
-                            </Text>
-                        </View>
-                        <View
-                            style={[
-                                styles.verifyDot,
-                                { backgroundColor: it.ok ? colors.ok600 : colors.danger600 },
-                            ]}
-                        >
-                            <Icon
-                                name={it.ok ? "check" : "x"}
-                                size={12}
-                                color={colors.paper}
-                            />
-                        </View>
-                    </View>
-                ))}
-            </Card>
-
-            <Card
-                padding={14}
-                style={[
-                    styles.verifyBanner,
-                    { backgroundColor: colors.ok100, borderColor: colors.ok600 },
-                ]}
-            >
-                <Icon name="check" size={14} color={colors.ok700} />
-                <Text style={[styles.verifyBannerText, { color: colors.ok700 }]}>
-                    {items.length} types vérifiés — triage conforme
-                </Text>
-            </Card>
-
-            <CtaRow nextLabel="Passer au lavage" onNext={onNext} onBack={onBack} />
-        </>
-    );
-}
-
-/* ---------- STEP 4-5-6 : DISPATCH (shared) ---------- */
+/* ---------- STEP 2-3-4 : DISPATCH (shared) ---------- */
 
 type DispatchKind = "lavage" | "sechage" | "calandrage";
 
@@ -685,7 +504,7 @@ function DispatchStep({
 function getDispatchConfig(kind: DispatchKind) {
     if (kind === "lavage") {
         return {
-            stepIndex: 4,
+            stepIndex: 2,
             label: "Lavage",
             title: "Dispatching lavage",
             subtitle: "Optimisation automatique des laveuses",
@@ -743,7 +562,7 @@ function getDispatchConfig(kind: DispatchKind) {
     }
     if (kind === "sechage") {
         return {
-            stepIndex: 5,
+            stepIndex: 3,
             label: "Séchage",
             title: "Dispatching séchage",
             subtitle: "Optimisation automatique des sécheuses",
@@ -801,7 +620,7 @@ function getDispatchConfig(kind: DispatchKind) {
     }
     // calandrage
     return {
-        stepIndex: 6,
+        stepIndex: 4,
         label: "Calandrage",
         title: "Dispatching calandrage",
         subtitle: "Optimisation repassage et finition",
@@ -878,7 +697,7 @@ function PreparationStep({ onBack }: { onBack: () => void }) {
     return (
         <>
             <StepHeader
-                caps="Étape 7 · Préparation"
+                caps="Étape 5 · Préparation"
                 title="Récapitulatif de la journée"
                 subtitle="Vérification finale avant génération des factures"
             />

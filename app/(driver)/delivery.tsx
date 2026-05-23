@@ -16,8 +16,15 @@ import Card from "@/components/ui/Card";
 import Icon, { IconName } from "@/components/ui/Icon";
 import StatusBadge from "@/components/ui/StatusBadge";
 import ThemedText from "@/components/ui/ThemedText";
+import { SignaturePad } from "@/components/shared/SignaturePad";
 import { FontFamily, Typography } from "@/constants/Typography";
 import { useThemeColors } from "@/hooks/useThemeColors";
+import { useDeliverOrder, useOrders } from "@/hooks/useOrders";
+import { useOrdersRealtime } from "@/hooks/useOrdersRealtime";
+import { capturePhoto, currentPosition } from "@/services/capture.service";
+import { uploadPhotos } from "@/services/uploads.service";
+import { formatDayHeader, isToday } from "@/lib/date";
+import { openMapsNavigation } from "@/lib/maps";
 
 /* ---------- Types & mock data ---------- */
 
@@ -57,6 +64,9 @@ type DeliveryOrder = {
     actualWeight: number;
     deliveryDate: string;
     deliveryTime: string;
+    /** Coordonnées de livraison (renseignées par le client à la commande). */
+    geoLat?: number;
+    geoLng?: number;
     triage: {
         completedAt: string;
         items: TriageItem[];
@@ -189,30 +199,62 @@ const STATUS_TO_UI: Record<DeliveryStatus, string> = {
 
 export default function DeliveryScreen() {
     const colors = useThemeColors();
+    useOrdersRealtime();
+    const { data: liveOrders } = useOrders();
+    const deliverMutation = useDeliverOrder();
+
     const [deliveries, setDeliveries] = useState<DeliveryOrder[]>([]);
     const [selected, setSelected] = useState<DeliveryOrder | null>(null);
     const [step, setStep] = useState<"list" | "details" | "complete">("list");
     const [showSignatureModal, setShowSignatureModal] = useState(false);
     const [recipientName, setRecipientName] = useState("");
+    const [dayFilter, setDayFilter] = useState<"today" | "all">("today");
 
+    /** Source de vérité = API orders. Fallback mock si pas connecté. */
     useEffect(() => {
-        void loadDeliveries();
-    }, []);
-
-    async function loadDeliveries() {
-        try {
-            const stored = await AsyncStorage.getItem(STORAGE_KEY);
-            if (stored) {
-                setDeliveries(JSON.parse(stored));
-            } else {
-                setDeliveries(mockDeliveries);
-                await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(mockDeliveries));
-            }
-        } catch (err) {
-            console.error("Error loading deliveries:", err);
-            setDeliveries(mockDeliveries);
-        }
-    }
+        if (!liveOrders) return;
+        const fromApi: DeliveryOrder[] = liveOrders
+            .filter((o) => o.status === "ready" || o.status === "in_progress" || o.status === "delivered")
+            .map((o) => {
+                const totalPieces = (o.services ?? []).reduce(
+                    (s, sv) => s + (sv.items?.reduce((ss, it) => ss + it.quantity, 0) ?? 0),
+                    0,
+                );
+                const weightG = Math.round((o.actualWeight ?? totalPieces * 0.3) * 1000);
+                // Backend réutilise collectionPlannedAt pour stocker la date planifiée
+                // de livraison (cf. schedule-delivery). Fallback sur deliveredAt puis collectionDate.
+                const dayAnchor =
+                    o.deliveryPlannedAt ??
+                    o.collectionPlannedAt ??
+                    o.deliveryDate ??
+                    o.collectionDate;
+                const apiStatus: DeliveryStatus =
+                    o.status === "delivered" ? "Livrée" : "Prêt pour livraison";
+                return {
+                    id: o.id,
+                    orderNumber: o.orderNumber,
+                    clientName: o.hotelName || "Hôtel",
+                    clientAddress: o.hotelAddress ?? "—",
+                    status: apiStatus,
+                    actualWeight: weightG,
+                    deliveryDate: dayAnchor,
+                    deliveryTime: new Date(dayAnchor).toLocaleTimeString("fr-FR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                    }),
+                    geoLat: o.pickupGeoLat,
+                    geoLng: o.pickupGeoLng,
+                    triage: {
+                        completedAt: dayAnchor,
+                        items: [],
+                        totalWeight: weightG,
+                        totalPieces,
+                        totalAmount: 0,
+                    },
+                };
+            });
+        setDeliveries(fromApi.length > 0 ? fromApi : mockDeliveries);
+    }, [liveOrders]);
 
     async function saveDeliveries(next: DeliveryOrder[]) {
         try {
@@ -281,34 +323,52 @@ export default function DeliveryScreen() {
         setStep("complete");
     };
 
-    const handleTakePhoto = () => {
+    const handleTakePhoto = async () => {
         if (!selected) return;
-        const newPhoto: Photo = {
-            uri: `photo_${Date.now()}.jpg`,
-            timestamp: new Date().toISOString(),
-        };
-        const photos = [...(selected.deliveryProgress?.photos ?? []), newPhoto];
-        updateDeliveryStatus(selected.id, selected.status, {
-            ...selected.deliveryProgress,
-            photos,
-        });
-        Alert.alert("Photo ajoutée", `Photo ${photos.length} enregistrée`);
+        try {
+            const localUri = await capturePhoto();
+            if (!localUri) return;
+            const [uploaded] = await uploadPhotos([localUri]);
+            if (!uploaded) return;
+            const newPhoto: Photo = {
+                uri: uploaded.url,
+                timestamp: new Date().toISOString(),
+            };
+            const photos = [...(selected.deliveryProgress?.photos ?? []), newPhoto];
+            updateDeliveryStatus(selected.id, selected.status, {
+                ...selected.deliveryProgress,
+                photos,
+            });
+        } catch (err) {
+            Alert.alert(
+                "Échec photo",
+                err instanceof Error ? err.message : "Upload échoué.",
+            );
+        }
     };
+
+    const [signaturePadOpen, setSignaturePadOpen] = useState(false);
 
     const handleSaveSignature = () => {
         if (!selected || !recipientName.trim()) {
             Alert.alert("Attention", "Veuillez entrer le nom du destinataire");
             return;
         }
+        // Ferme le modal "nom" et ouvre le canvas signature
+        setShowSignatureModal(false);
+        setSignaturePadOpen(true);
+    };
+
+    const handleSignatureCapture = (signedUrl: string) => {
+        if (!selected) return;
         updateDeliveryStatus(selected.id, selected.status, {
             ...selected.deliveryProgress,
-            signatureUri: `signature_${Date.now()}.png`,
-            recipientName: recipientName.trim(),
+            signatureUri: signedUrl,
+            recipientName: recipientName.trim() || selected.deliveryProgress?.recipientName,
             photos: selected.deliveryProgress?.photos ?? [],
         });
-        setShowSignatureModal(false);
         setRecipientName("");
-        Alert.alert("Signature enregistrée", `Signé par : ${recipientName.trim()}`);
+        Alert.alert("Signature enregistrée", "Signature client capturée et uploadée.");
     };
 
     const handleCompleteDelivery = () => {
@@ -329,34 +389,57 @@ export default function DeliveryScreen() {
                 { text: "Annuler", style: "cancel" },
                 {
                     text: "Confirmer",
-                    onPress: () => {
-                        updateDeliveryStatus(selected.id, "Livrée", {
-                            ...selected.deliveryProgress,
-                            completedAt: new Date().toISOString(),
-                            photos,
-                            signatureUri: signature,
-                        });
-                        Alert.alert(
-                            "Livraison terminée",
-                            "La livraison a été enregistrée avec succès",
-                            [
-                                {
-                                    text: "OK",
-                                    onPress: () => {
-                                        setSelected(null);
-                                        setStep("list");
-                                    },
+                    onPress: async () => {
+                        try {
+                            const geo = await currentPosition();
+                            await deliverMutation.mutateAsync({
+                                id: selected.id,
+                                data: {
+                                    recipientName:
+                                        selected.deliveryProgress?.recipientName ?? recipientName ?? "—",
+                                    deliveryPhotos: photos.map((p) => p.uri),
+                                    signatureUrl: signature,
+                                    geoLat: geo?.lat,
+                                    geoLng: geo?.lng,
                                 },
-                            ],
-                        );
+                            });
+                            updateDeliveryStatus(selected.id, "Livrée", {
+                                ...selected.deliveryProgress,
+                                completedAt: new Date().toISOString(),
+                                photos,
+                                signatureUri: signature,
+                            });
+                            Alert.alert(
+                                "Livraison terminée",
+                                "La livraison a été enregistrée avec succès",
+                                [
+                                    {
+                                        text: "OK",
+                                        onPress: () => {
+                                            setSelected(null);
+                                            setStep("list");
+                                        },
+                                    },
+                                ],
+                            );
+                        } catch (err) {
+                            Alert.alert(
+                                "Erreur",
+                                err instanceof Error ? err.message : "Échec API livraison.",
+                            );
+                        }
                     },
                 },
             ],
         );
     };
 
-    const active = deliveries.filter((d) => d.status !== "Livrée");
-    const done = deliveries.filter((d) => d.status === "Livrée");
+    const filtered = dayFilter === "today"
+        ? deliveries.filter((d) => isToday(d.deliveryDate))
+        : deliveries;
+    const active = filtered.filter((d) => d.status !== "Livrée");
+    const done = filtered.filter((d) => d.status === "Livrée");
+    const todayCount = deliveries.filter((d) => isToday(d.deliveryDate)).length;
 
     /* ---------- LIST VIEW ---------- */
     if (step === "list") {
@@ -371,7 +454,12 @@ export default function DeliveryScreen() {
                         { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
                     ]}
                 >
-                    <ThemedText variate="title">Livraisons</ThemedText>
+                    <View style={{ flex: 1 }}>
+                        <ThemedText variate="title">Livraisons</ThemedText>
+                        <Text style={[styles.headerSub, { color: colors.ink500 }]}>
+                            {dayFilter === "today" ? formatDayHeader() : "Toutes les livraisons"}
+                        </Text>
+                    </View>
                     <View
                         style={[
                             styles.countBadge,
@@ -384,6 +472,19 @@ export default function DeliveryScreen() {
                             {active.length}
                         </Text>
                     </View>
+                </View>
+
+                <View style={[styles.filterBar, { backgroundColor: colors.paper, borderBottomColor: colors.ink200 }]}>
+                    <DayChip
+                        label={`Aujourd'hui · ${todayCount}`}
+                        active={dayFilter === "today"}
+                        onPress={() => setDayFilter("today")}
+                    />
+                    <DayChip
+                        label={`Toutes · ${deliveries.length}`}
+                        active={dayFilter === "all"}
+                        onPress={() => setDayFilter("all")}
+                    />
                 </View>
 
                 <ScrollView
@@ -413,8 +514,17 @@ export default function DeliveryScreen() {
                             <Text
                                 style={[styles.emptyText, { color: colors.ink500 }]}
                             >
-                                Aucune livraison pour aujourd'hui
+                                {dayFilter === "today"
+                                    ? "Aucune livraison pour aujourd'hui"
+                                    : "Aucune livraison"}
                             </Text>
+                            {dayFilter === "today" && deliveries.length > 0 && (
+                                <Pressable onPress={() => setDayFilter("all")} hitSlop={8}>
+                                    <Text style={[styles.emptyLink, { color: colors.brand800 }]}>
+                                        Voir toutes les livraisons ({deliveries.length})
+                                    </Text>
+                                </Pressable>
+                            )}
                         </View>
                     )}
 
@@ -502,6 +612,37 @@ export default function DeliveryScreen() {
                             >
                                 {selected.clientAddress}
                             </Text>
+                            {selected.geoLat != null && selected.geoLng != null && (
+                                <Pressable
+                                    onPress={() =>
+                                        openMapsNavigation(
+                                            selected.geoLat!,
+                                            selected.geoLng!,
+                                            selected.clientName,
+                                        )
+                                    }
+                                    hitSlop={8}
+                                    style={[
+                                        styles.navigateBtn,
+                                        { backgroundColor: colors.paper },
+                                    ]}
+                                >
+                                    <Icon
+                                        name="navigate"
+                                        size={11}
+                                        color={colors.brand800}
+                                        stroke={2}
+                                    />
+                                    <Text
+                                        style={[
+                                            styles.navigateText,
+                                            { color: colors.brand800 },
+                                        ]}
+                                    >
+                                        Naviguer
+                                    </Text>
+                                </Pressable>
+                            )}
                         </View>
 
                         <View
@@ -982,6 +1123,13 @@ export default function DeliveryScreen() {
                             </View>
                         </View>
                     </Modal>
+
+                    <SignaturePad
+                        visible={signaturePadOpen}
+                        onClose={() => setSignaturePadOpen(false)}
+                        onSign={handleSignatureCapture}
+                        title={`Signature · ${selected.clientName}`}
+                    />
                 </ScrollView>
             </SafeAreaView>
         );
@@ -991,6 +1139,39 @@ export default function DeliveryScreen() {
 }
 
 /* ---------- Sub-components ---------- */
+
+function DayChip({
+    label,
+    active,
+    onPress,
+}: {
+    label: string;
+    active: boolean;
+    onPress: () => void;
+}) {
+    const colors = useThemeColors();
+    return (
+        <Pressable
+            onPress={onPress}
+            style={[
+                styles.dayChip,
+                {
+                    backgroundColor: active ? colors.brand800 : colors.paper2,
+                    borderColor: active ? colors.brand800 : colors.ink200,
+                },
+            ]}
+        >
+            <Text
+                style={[
+                    styles.dayChipText,
+                    { color: active ? colors.paper : colors.ink700 },
+                ]}
+            >
+                {label}
+            </Text>
+        </Pressable>
+    );
+}
 
 function DeliveryListItem({
     delivery,
@@ -1286,6 +1467,12 @@ const styles = StyleSheet.create({
     },
     content: { padding: 16, paddingBottom: 120 },
 
+    headerSub: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
+        marginTop: 2,
+        textTransform: "capitalize",
+    },
     countBadge: {
         paddingHorizontal: 10,
         paddingVertical: 3,
@@ -1295,6 +1482,29 @@ const styles = StyleSheet.create({
     countBadgeText: {
         fontFamily: FontFamily.uiSemibold,
         fontSize: Typography.fontSize.tiny,
+    },
+    filterBar: {
+        flexDirection: "row",
+        gap: 8,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    dayChip: {
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 999,
+        borderWidth: StyleSheet.hairlineWidth,
+    },
+    dayChipText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.tiny,
+    },
+    emptyLink: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.tiny,
+        textDecorationLine: "underline",
+        marginTop: 4,
     },
 
     sectionLabel: { marginBottom: 10, paddingLeft: 4 },
@@ -1416,6 +1626,18 @@ const styles = StyleSheet.create({
         fontFamily: FontFamily.uiRegular,
         fontSize: Typography.fontSize.tiny,
         flex: 1,
+    },
+    navigateBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 99,
+    },
+    navigateText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.micro,
     },
     orderTotals: {
         flexDirection: "row",

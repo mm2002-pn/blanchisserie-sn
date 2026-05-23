@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
     Alert,
     Pressable,
@@ -15,6 +15,9 @@ import Icon, { IconName } from "@/components/ui/Icon";
 import ThemedText from "@/components/ui/ThemedText";
 import { FontFamily, Typography } from "@/constants/Typography";
 import { useOrder } from "@/contexts/OrderContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useLinenTypes } from "@/hooks/useLinenTypes";
+import { useApplicableTariff } from "@/hooks/useTariff";
 import { useThemeColors } from "@/hooks/useThemeColors";
 import {
     LinenType,
@@ -25,37 +28,11 @@ import {
 
 const SERVICES_MAP: Record<
     ServiceType,
-    { label: string; icon: IconName; pricePerKg: number; tone: "brand" | "baobab" | "terra" }
+    { label: string; icon: IconName; tone: "brand" | "baobab" | "terra" }
 > = {
-    nettoyage: { label: "Nettoyage", icon: "droplet", pricePerKg: 800, tone: "terra" },
-    blanchisserie: { label: "Blanchisserie", icon: "package", pricePerKg: 500, tone: "brand" },
-    aqua_clean: { label: "Aqua Clean", icon: "spark", pricePerKg: 600, tone: "baobab" },
-};
-
-const LINEN_TYPES_MAP: Record<LinenType, string> = {
-    drap: "Drap",
-    taie: "Taie d'oreiller",
-    serviette: "Serviette",
-    nappe: "Nappe",
-    torchon: "Torchon",
-    rideau: "Rideau",
-    couverture: "Couverture",
-    housse: "Housse de couette",
-    peignoir: "Peignoir",
-    tapis: "Tapis",
-};
-
-const LINEN_WEIGHTS: Record<LinenType, number> = {
-    drap: 0.8,
-    taie: 0.2,
-    serviette: 0.3,
-    nappe: 0.6,
-    torchon: 0.1,
-    rideau: 1.5,
-    couverture: 2.0,
-    housse: 1.0,
-    peignoir: 0.5,
-    tapis: 3.0,
+    nettoyage: { label: "Nettoyage", icon: "droplet", tone: "terra" },
+    blanchisserie: { label: "Blanchisserie", icon: "package", tone: "brand" },
+    aqua_clean: { label: "Aqua Clean", icon: "spark", tone: "baobab" },
 };
 
 export default function OrderValidationScreen() {
@@ -64,20 +41,48 @@ export default function OrderValidationScreen() {
     const params = useLocalSearchParams();
     const { createOrder, isLoading } = useOrder();
 
+    const pickupLatStr = (params.pickupGeoLat as string | undefined) ?? "";
+    const pickupLngStr = (params.pickupGeoLng as string | undefined) ?? "";
+    const pickupGeoLat = pickupLatStr ? Number(pickupLatStr) : undefined;
+    const pickupGeoLng = pickupLngStr ? Number(pickupLngStr) : undefined;
+
     const orderData: OrderFormData = {
         services: JSON.parse(params.services as string) as OrderService[],
         collectionDate: params.collectionDate as string,
         instructions: params.instructions as string,
         photos: params.photos ? JSON.parse(params.photos as string) : undefined,
+        pickupGeoLat:
+            Number.isFinite(pickupGeoLat) ? (pickupGeoLat as number) : undefined,
+        pickupGeoLng:
+            Number.isFinite(pickupGeoLng) ? (pickupGeoLng as number) : undefined,
     };
 
     const [loading, setLoading] = useState(false);
+
+    /** Catalogue API : alimente nom + poids moyen par code de linen type.
+     *  Aucun fallback codé — l'admin doit gérer le catalogue via le back-office. */
+    const { data: apiLinens = [] } = useLinenTypes();
+    const linenLabelByCode = useMemo(() => {
+        const m: Record<string, string> = {};
+        for (const lt of apiLinens) m[lt.code] = lt.name;
+        return m;
+    }, [apiLinens]);
+    const linenWeightByCode = useMemo(() => {
+        const m: Record<string, number> = {};
+        for (const lt of apiLinens) m[lt.code] = (lt.averageWeight ?? 0) / 1000;
+        return m;
+    }, [apiLinens]);
+
+    const weightForItem = (typeCode: string): number =>
+        linenWeightByCode[typeCode] ?? 0;
+    const labelForItem = (typeCode: string): string =>
+        linenLabelByCode[typeCode] ?? typeCode;
 
     const estimatedWeight = orderData.services.reduce((sum, service) => {
         return (
             sum +
             service.items.reduce(
-                (acc, item) => acc + (LINEN_WEIGHTS[item.type] || 0.5) * item.quantity,
+                (acc, item) => acc + weightForItem(item.type) * item.quantity,
                 0,
             )
         );
@@ -88,10 +93,45 @@ export default function OrderValidationScreen() {
         0,
     );
 
-    const estimatedPrice = orderData.services.reduce((sum, service) => {
-        const info = SERVICES_MAP[service.service];
-        return sum + info.pricePerKg * (estimatedWeight / orderData.services.length);
-    }, 0);
+    /** Estimation prix : utilise le vrai tarif du client (idem new-order.tsx).
+     *  Si un type n'a pas de ligne tarif, il est exclu — pas de fallback codé. */
+    const { user } = useAuth();
+    const { data: tariff } = useApplicableTariff(user?.clientId);
+    const tariffByCode = useMemo(() => {
+        const m: Record<
+            string,
+            {
+                pricePerKg: number | null;
+                pricePerPiece: number | null;
+                billingMode: "weight" | "piece";
+            }
+        > = {};
+        for (const it of tariff?.items ?? []) {
+            m[it.linenTypeCode] = {
+                pricePerKg: it.pricePerKg != null ? Number(it.pricePerKg) : null,
+                pricePerPiece:
+                    it.pricePerPiece != null ? Number(it.pricePerPiece) : null,
+                billingMode: it.billingMode,
+            };
+        }
+        return m;
+    }, [tariff]);
+
+    const estimatedPrice = useMemo(() => {
+        let total = 0;
+        for (const svc of orderData.services) {
+            for (const it of svc.items) {
+                const t = tariffByCode[it.type];
+                if (!t) continue;
+                if (t.billingMode === "piece" && t.pricePerPiece != null) {
+                    total += it.quantity * t.pricePerPiece;
+                } else if (t.billingMode === "weight" && t.pricePerKg != null) {
+                    total += it.quantity * weightForItem(it.type) * t.pricePerKg;
+                }
+            }
+        }
+        return Math.round(total);
+    }, [orderData.services, tariffByCode, linenWeightByCode]);
 
     const handleConfirm = async () => {
         try {
@@ -120,18 +160,22 @@ export default function OrderValidationScreen() {
         }
     };
 
+    // Convention wall-clock : la date/heure saisie est stockée en UTC pour
+    // éviter la dérive timezone entre devices — on l'affiche donc en UTC.
     const formatDate = (iso: string) =>
         new Date(iso).toLocaleDateString("fr-FR", {
             weekday: "long",
             year: "numeric",
             month: "long",
             day: "numeric",
+            timeZone: "UTC",
         });
 
     const formatTime = (iso: string) =>
         new Date(iso).toLocaleTimeString("fr-FR", {
             hour: "2-digit",
             minute: "2-digit",
+            timeZone: "UTC",
         });
 
     const busy = loading || isLoading;
@@ -232,7 +276,7 @@ export default function OrderValidationScreen() {
                                         <Text
                                             style={[styles.servicePrice, { color: colors.ink500 }]}
                                         >
-                                            {info.pricePerKg} F CFA / kg
+                                            Facturation au poids réel
                                         </Text>
                                     </View>
                                 </View>
@@ -254,7 +298,7 @@ export default function OrderValidationScreen() {
                                             <Text
                                                 style={[styles.itemName, { color: colors.ink900 }]}
                                             >
-                                                {LINEN_TYPES_MAP[item.type]}
+                                                {labelForItem(item.type)}
                                             </Text>
                                             <View style={styles.itemRight}>
                                                 <Text
@@ -271,7 +315,7 @@ export default function OrderValidationScreen() {
                                                         { color: colors.ink500 },
                                                     ]}
                                                 >
-                                                    ≈ {(LINEN_WEIGHTS[item.type] * item.quantity).toFixed(1)} kg
+                                                    ≈ {(weightForItem(item.type) * item.quantity).toFixed(1)} kg
                                                 </Text>
                                             </View>
                                         </View>
@@ -281,31 +325,6 @@ export default function OrderValidationScreen() {
                         );
                     })}
                 </View>
-
-                {/* Collection date */}
-                <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
-                    Collecte programmée
-                </ThemedText>
-                <Card padding={14} style={{ marginBottom: 14 }}>
-                    <View style={styles.dateRow}>
-                        <View
-                            style={[styles.dateIcon, { backgroundColor: colors.brand100 }]}
-                        >
-                            <Icon name="calendar" size={16} color={colors.brand800} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={[styles.dateValue, { color: colors.ink900 }]}>
-                                {formatDate(orderData.collectionDate)}
-                            </Text>
-                            <View style={styles.dateTimeRow}>
-                                <Icon name="clock" size={11} color={colors.ink500} />
-                                <Text style={[styles.dateTime, { color: colors.ink500 }]}>
-                                    {formatTime(orderData.collectionDate)}
-                                </Text>
-                            </View>
-                        </View>
-                    </View>
-                </Card>
 
                 {/* Instructions */}
                 {orderData.instructions?.trim() && (

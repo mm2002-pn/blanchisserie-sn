@@ -2,10 +2,12 @@ import { Tabs } from "expo-router";
 import { StyleSheet } from "react-native";
 import Icon, { IconName } from "@/components/ui/Icon";
 import { FontFamily, Typography } from "@/constants/Typography";
+import { useOrderNotifications } from "@/hooks/useOrderNotifications";
 import { useThemeColors } from "@/hooks/useThemeColors";
 
 export default function SupervisorLayout() {
     const colors = useThemeColors();
+    useOrderNotifications("staff");
 
     return (
         <Tabs
@@ -28,6 +30,24 @@ export default function SupervisorLayout() {
             }}
         >
             <Tabs.Screen
+                name="pesee"
+                options={{
+                    title: "Pesée",
+                    tabBarIcon: ({ color, focused }) => (
+                        <TabIcon name="weight" color={color} focused={focused} />
+                    ),
+                }}
+            />
+            <Tabs.Screen
+                name="triage"
+                options={{
+                    title: "Triage",
+                    tabBarIcon: ({ color, focused }) => (
+                        <TabIcon name="filter" color={color} focused={focused} />
+                    ),
+                }}
+            />
+            <Tabs.Screen
                 name="production"
                 options={{
                     title: "Production",
@@ -46,33 +66,18 @@ export default function SupervisorLayout() {
                 }}
             />
             <Tabs.Screen
-                name="quality"
+                name="profile"
                 options={{
-                    title: "Qualité",
-                    tabBarIcon: ({ color, focused }) => (
-                        <TabIcon name="spark" color={color} focused={focused} />
-                    ),
-                }}
-            />
-            <Tabs.Screen
-                name="team"
-                options={{
-                    title: "Équipe",
+                    title: "Profil",
                     tabBarIcon: ({ color, focused }) => (
                         <TabIcon name="user" color={color} focused={focused} />
                     ),
                 }}
             />
-            <Tabs.Screen
-                name="profile"
-                options={{
-                    title: "Profil",
-                    tabBarIcon: ({ color, focused }) => (
-                        <TabIcon name="settings" color={color} focused={focused} />
-                    ),
-                }}
-            />
 
+            {/* Push-only (accessibles via lien direct mais hors tabbar) */}
+            <Tabs.Screen name="quality" options={{ href: null, title: "Qualité" }} />
+            <Tabs.Screen name="team" options={{ href: null, title: "Équipe" }} />
             <Tabs.Screen name="reports" options={{ href: null, title: "Rapports" }} />
         </Tabs>
     );

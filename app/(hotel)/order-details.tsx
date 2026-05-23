@@ -16,8 +16,11 @@ import Icon from "@/components/ui/Icon";
 import StatusBadge, { OrderStatus as UIStatus } from "@/components/ui/StatusBadge";
 import ThemedText from "@/components/ui/ThemedText";
 import { FontFamily, Typography } from "@/constants/Typography";
-import { useOrder } from "@/contexts/OrderContext";
+import { useOrder as useOrderContext } from "@/contexts/OrderContext";
+import { useLinenTypes } from "@/hooks/useLinenTypes";
+import { useOrder } from "@/hooks/useOrders";
 import { useThemeColors } from "@/hooks/useThemeColors";
+import { downloadOrderDocument } from "@/services/documents.service";
 import type { LinenType, Order, OrderStatus } from "@/types/order.types";
 
 const STATUS_TO_UI: Record<OrderStatus, UIStatus> = {
@@ -38,7 +41,7 @@ const TIMELINE: { key: OrderStatus; label: string }[] = [
     { key: "delivered", label: "Livrée" },
 ];
 
-const LINEN_LABELS: Record<LinenType, string> = {
+const LINEN_LABELS: Record<string, string> = {
     drap: "Draps",
     taie: "Taies d'oreiller",
     serviette: "Serviettes",
@@ -51,7 +54,7 @@ const LINEN_LABELS: Record<LinenType, string> = {
     tapis: "Tapis",
 };
 
-const LINEN_WEIGHT: Record<LinenType, number> = {
+const LINEN_WEIGHT: Record<string, number> = {
     drap: 0.9,
     taie: 0.2,
     serviette: 0.6,
@@ -66,10 +69,19 @@ const LINEN_WEIGHT: Record<LinenType, number> = {
 
 function formatDateTime(iso: string) {
     const d = new Date(iso);
+    // Convention wall-clock : on lit en UTC (= heure saisie par le client)
     return (
-        d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) +
+        d.toLocaleDateString("fr-FR", {
+            day: "numeric",
+            month: "short",
+            timeZone: "UTC",
+        }) +
         " · " +
-        d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+        d.toLocaleTimeString("fr-FR", {
+            hour: "2-digit",
+            minute: "2-digit",
+            timeZone: "UTC",
+        })
     );
 }
 
@@ -84,14 +96,26 @@ export default function OrderDetailsScreen() {
     const router = useRouter();
     const colors = useThemeColors();
     const params = useLocalSearchParams();
-    const { getOrderById, cancelOrder, isLoading } = useOrder();
+    const { cancelOrder, isLoading } = useOrderContext();
 
     const orderId = params.id as string;
-    const order = useMemo<Order | null>(
-        () => (orderId ? getOrderById(orderId) ?? null : null),
-        [orderId, getOrderById],
-    );
+    const { data: liveOrder } = useOrder(orderId);
+    const order = useMemo<Order | null>(() => liveOrder ?? null, [liveOrder]);
     const [cancelling, setCancelling] = useState(false);
+
+    /** Lookup nom + poids depuis le catalogue API (codes type "LP-001") avec
+     *  fallback sur les anciens libellés statiques (drap, taie, etc.). */
+    const { data: apiLinens = [] } = useLinenTypes();
+    const labelByCode = useMemo(() => {
+        const m: Record<string, string> = { ...LINEN_LABELS };
+        for (const lt of apiLinens) m[lt.code] = lt.name;
+        return m;
+    }, [apiLinens]);
+    const weightByCode = useMemo(() => {
+        const m: Record<string, number> = { ...LINEN_WEIGHT };
+        for (const lt of apiLinens) m[lt.code] = (lt.averageWeight ?? 0) / 1000;
+        return m;
+    }, [apiLinens]);
 
     if (!order) {
         return (
@@ -131,7 +155,10 @@ export default function OrderDetailsScreen() {
             : 0;
 
     const canCancel = ["pending", "confirmed"].includes(order.status);
-    const canModify = order.status === "pending";
+    // Modification autorisée tant que la commande n'est pas collectée.
+    // Backend valide les états (pending / confirmed / collection_planned).
+    const canModify =
+        order.status === "pending" || order.status === "confirmed";
 
     const handleCancel = () =>
         Alert.alert(
@@ -312,6 +339,40 @@ export default function OrderDetailsScreen() {
                     </View>
                 </Card>
 
+                {/* Documents commerciaux */}
+                <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
+                    Documents
+                </ThemedText>
+                <Card padding={12} style={{ marginBottom: 14 }}>
+                    <View style={styles.docsRow}>
+                        <DocumentButton
+                            orderId={order.id}
+                            type="bon-commande"
+                            label="Bon de commande"
+                            sub="CMD"
+                            enabled
+                        />
+                        <DocumentButton
+                            orderId={order.id}
+                            type="bon-collecte"
+                            label="Bon de collecte"
+                            sub="BCOL"
+                            enabled={
+                                order.status !== "pending" &&
+                                order.status !== "confirmed" &&
+                                order.status !== "cancelled"
+                            }
+                        />
+                        <DocumentButton
+                            orderId={order.id}
+                            type="bon-livraison"
+                            label="Bon de livraison"
+                            sub="BL"
+                            enabled={order.status === "delivered"}
+                        />
+                    </View>
+                </Card>
+
                 {/* Weight comparator */}
                 <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
                     Poids estimé vs réel
@@ -457,7 +518,7 @@ export default function OrderDetailsScreen() {
                                             { color: colors.ink900 },
                                         ]}
                                     >
-                                        {LINEN_LABELS[it.type]}
+                                        {labelByCode[it.type] ?? it.type}
                                     </Text>
                                     <View style={styles.articleMeta}>
                                         <Text
@@ -468,7 +529,7 @@ export default function OrderDetailsScreen() {
                                         <Text
                                             style={[styles.articleKg, { color: colors.ink900 }]}
                                         >
-                                            {frNumber(it.quantity * (LINEN_WEIGHT[it.type] ?? 0.4))} kg
+                                            {frNumber(it.quantity * (weightByCode[it.type] ?? 0.4))} kg
                                         </Text>
                                     </View>
                                 </View>
@@ -612,6 +673,69 @@ export default function OrderDetailsScreen() {
     );
 }
 
+/** Bouton de téléchargement d'un document de commande (PDF). */
+function DocumentButton({
+    orderId,
+    type,
+    label,
+    sub,
+    enabled,
+}: {
+    orderId: string;
+    type: "bon-commande" | "bon-collecte" | "bon-livraison";
+    label: string;
+    sub: string;
+    enabled: boolean;
+}) {
+    const colors = useThemeColors();
+    const [busy, setBusy] = useState(false);
+
+    const handlePress = async () => {
+        if (!enabled || busy) return;
+        setBusy(true);
+        try {
+            await downloadOrderDocument(orderId, type);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <Pressable
+            onPress={handlePress}
+            disabled={!enabled || busy}
+            style={[
+                styles.docBtn,
+                {
+                    backgroundColor: enabled ? colors.paper : colors.paper2,
+                    borderColor: enabled ? colors.ink200 : colors.ink100,
+                    opacity: enabled ? (busy ? 0.6 : 1) : 0.5,
+                },
+            ]}
+        >
+            <Icon
+                name="receipt"
+                size={16}
+                color={enabled ? colors.brand800 : colors.ink400}
+            />
+            <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                    style={[
+                        styles.docBtnLabel,
+                        { color: enabled ? colors.ink900 : colors.ink500 },
+                    ]}
+                    numberOfLines={1}
+                >
+                    {label}
+                </Text>
+                <Text style={[styles.docBtnSub, { color: colors.ink500 }]}>
+                    {busy ? "Téléchargement…" : sub}
+                </Text>
+            </View>
+        </Pressable>
+    );
+}
+
 const styles = StyleSheet.create({
     container: { flex: 1 },
 
@@ -667,6 +791,30 @@ const styles = StyleSheet.create({
     sectionLabel: {
         marginBottom: 10,
         paddingLeft: 2,
+    },
+
+    docsRow: {
+        flexDirection: "row",
+        gap: 8,
+    },
+    docBtn: {
+        flex: 1,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 12,
+        borderRadius: 10,
+        borderWidth: StyleSheet.hairlineWidth,
+    },
+    docBtnLabel: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.tiny,
+    },
+    docBtnSub: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.micro,
+        marginTop: 1,
     },
 
     // Timeline

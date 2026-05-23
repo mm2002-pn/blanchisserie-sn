@@ -2,10 +2,12 @@ import { Tabs } from "expo-router";
 import { StyleSheet } from "react-native";
 import Icon, { IconName } from "@/components/ui/Icon";
 import { FontFamily, Typography } from "@/constants/Typography";
+import { useOrderNotifications } from "@/hooks/useOrderNotifications";
 import { useThemeColors } from "@/hooks/useThemeColors";
 
 export default function HotelLayout() {
     const colors = useThemeColors();
+    useOrderNotifications();
 
     return (
         <Tabs

@@ -2,10 +2,12 @@ import { Tabs } from "expo-router";
 import { StyleSheet } from "react-native";
 import Icon, { IconName } from "@/components/ui/Icon";
 import { FontFamily, Typography } from "@/constants/Typography";
+import { useOrderNotifications } from "@/hooks/useOrderNotifications";
 import { useThemeColors } from "@/hooks/useThemeColors";
 
 export default function DriverLayout() {
     const colors = useThemeColors();
+    useOrderNotifications("driver");
 
     return (
         <Tabs
@@ -30,27 +32,18 @@ export default function DriverLayout() {
             <Tabs.Screen
                 name="route"
                 options={{
+                    title: "Carte",
+                    tabBarIcon: ({ color, focused }) => (
+                        <TabIcon name="map" color={color} focused={focused} />
+                    ),
+                }}
+            />
+            <Tabs.Screen
+                name="collections"
+                options={{
                     title: "Tournée",
                     tabBarIcon: ({ color, focused }) => (
                         <TabIcon name="route" color={color} focused={focused} />
-                    ),
-                }}
-            />
-            <Tabs.Screen
-                name="collect"
-                options={{
-                    title: "Collecte",
-                    tabBarIcon: ({ color, focused }) => (
-                        <TabIcon name="package" color={color} focused={focused} />
-                    ),
-                }}
-            />
-            <Tabs.Screen
-                name="delivery"
-                options={{
-                    title: "Livraison",
-                    tabBarIcon: ({ color, focused }) => (
-                        <TabIcon name="truck" color={color} focused={focused} />
                     ),
                 }}
             />
@@ -73,7 +66,12 @@ export default function DriverLayout() {
                 }}
             />
 
+            {/* Push-only (accessibles via lien direct mais hors tabbar) */}
+            <Tabs.Screen name="delivery" options={{ href: null, title: "Livraison" }} />
             <Tabs.Screen name="navigation" options={{ href: null, title: "Navigation" }} />
+            <Tabs.Screen name="tour-detail" options={{ href: null, title: "Détail tournée" }} />
+            <Tabs.Screen name="collect" options={{ href: null, title: "Scanner & collecter" }} />
+            <Tabs.Screen name="deliver" options={{ href: null, title: "Livrer" }} />
         </Tabs>
     );
 }

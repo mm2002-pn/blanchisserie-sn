@@ -41,7 +41,10 @@ export type IconName =
     | "signature"
     | "weight"
     | "wrench"
-    | "logout";
+    | "logout"
+    | "mapPin"
+    | "navigate"
+    | "crosshair";
 
 interface IconProps {
     name: IconName;
@@ -242,6 +245,24 @@ const PATHS: Record<IconName, React.ReactNode> = {
         <>
             <Path d="M9 3H5a2 2 0 00-2 2v14a2 2 0 002 2h4" />
             <Path d="M16 17l5-5-5-5M21 12H9" />
+        </>
+    ),
+    mapPin: (
+        <>
+            <Path d="M12 21s-7-7-7-12a7 7 0 0114 0c0 5-7 12-7 12z" />
+            <Circle cx="12" cy="9" r="2.5" />
+        </>
+    ),
+    navigate: (
+        <>
+            <Path d="M3 11l18-8-8 18-2-8-8-2z" />
+        </>
+    ),
+    crosshair: (
+        <>
+            <Circle cx="12" cy="12" r="9" />
+            <Circle cx="12" cy="12" r="3" />
+            <Path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
         </>
     ),
 };
