@@ -11,16 +11,21 @@
     },
     "preview": {
       "distribution": "internal",
+      "android": { "buildType": "apk" },
       "node": "22.12.0",
       "env": {
-        "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
+        "NPM_CONFIG_LEGACY_PEER_DEPS": "true",
+        "EXPO_PUBLIC_API_URL": "https://api.blanchisserie.sanoushop.com/api/v1",
+        "EXPO_PUBLIC_WS_URL": "https://api.blanchisserie.sanoushop.com"
       }
     },
     "production": {
       "autoIncrement": true,
       "node": "22.12.0",
       "env": {
-        "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
+        "NPM_CONFIG_LEGACY_PEER_DEPS": "true",
+        "EXPO_PUBLIC_API_URL": "https://api.blanchisserie.sanoushop.com/api/v1",
+        "EXPO_PUBLIC_WS_URL": "https://api.blanchisserie.sanoushop.com"
       }
     }
   },
