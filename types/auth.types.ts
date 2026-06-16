@@ -7,6 +7,8 @@ export interface User {
     name: string;
     phone?: string;
     avatar?: string;
+    /** ID du Client (hôtel) associé — uniquement si role === 'hotel'. */
+    clientId?: string | null;
 }
 
 export interface AuthContextType {

@@ -1,8 +1,13 @@
 import { Colors } from "@/constants/Colors";
-import { useColorScheme } from "react-native";
 
-export function useThemeColors () {
-  const theme = useColorScheme() ?? "light";
-
-    return Colors[theme];
+/**
+ * Renvoie la palette de l'app.
+ *
+ * Le design n'a qu'un mode "light" abouti — la palette "dark" existe mais
+ * n'est pas finalisée (rendu cassé en mode sombre sur Android). On force
+ * "light" pour matcher `userInterfaceStyle: "light"` déclaré dans app.json,
+ * quel que soit le mode système du device.
+ */
+export function useThemeColors() {
+  return Colors.light;
 }

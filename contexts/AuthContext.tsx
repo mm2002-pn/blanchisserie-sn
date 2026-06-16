@@ -1,27 +1,38 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useQueryClient } from '@tanstack/react-query';
 import { AuthContextType, User } from '@/types/auth.types';
-import { mockUsers } from '@/data/mock-users';
+import {
+  ApiError,
+} from '@/services/api';
+import {
+  flushSession,
+  loginRequest,
+  logoutRequest,
+  persistSession,
+} from '@/services/auth.service';
+import { STORAGE_KEYS, getItem } from '@/services/storage';
+import { registerPushToken, unregisterPushToken } from '@/services/push.service';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+    const queryClient = useQueryClient();
     const [user, setUser] = useState<User | null>(null);
     const [token, setToken] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
-    // Load user from storage on mount
     useEffect(() => {
         loadUserFromStorage();
     }, []);
 
     const loadUserFromStorage = async () => {
         try {
-            const storedUser = await AsyncStorage.getItem('user');
-            const storedToken = await AsyncStorage.getItem('token');
-
+            const [storedUser, storedToken] = await Promise.all([
+                getItem(STORAGE_KEYS.USER),
+                getItem(STORAGE_KEYS.ACCESS_TOKEN),
+            ]);
             if (storedUser && storedToken) {
-                setUser(JSON.parse(storedUser));
+                setUser(JSON.parse(storedUser) as User);
                 setToken(storedToken);
             }
         } catch (error) {
@@ -31,37 +42,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
-    const login = async (email: string, password: string) => {
+    const login = async (email: string, password: string): Promise<User> => {
         setIsLoading(true);
         try {
-            // Simulate API call with mock data
-            const foundUser = mockUsers.find(
-                u => u.email === email && u.password === password
-            );
-
-            if (!foundUser) {
-                throw new Error('Email ou mot de passe incorrect');
-            }
-
-            // Remove password from user object
-            const { password: _, ...userWithoutPassword } = foundUser;
-
-            // Generate mock JWT token
-            const mockToken = `mock-jwt-token-${foundUser.id}-${Date.now()}`;
-
-            // Save to state
-            setUser(userWithoutPassword);
-            setToken(mockToken);
-
-            // Save to AsyncStorage
-            await AsyncStorage.setItem('user', JSON.stringify(userWithoutPassword));
-            await AsyncStorage.setItem('token', mockToken);
-
-            // Return user for role-based navigation
-            return userWithoutPassword;
+            const res = await loginRequest(email, password);
+            const mapped = await persistSession(res);
+            // Vide tout le cache avant de set le nouvel user pour eviter de voir
+            // les donnees de la session precedente (scope clientId).
+            queryClient.clear();
+            setUser(mapped);
+            setToken(res.accessToken);
+            // Push token enregistré en arrière-plan, n'attend pas
+            void registerPushToken();
+            return mapped;
         } catch (error) {
-            console.error('Login error:', error);
-            throw error;
+            const message =
+                error instanceof ApiError
+                    ? error.code === 'UNAUTHORIZED'
+                        ? 'Email ou mot de passe incorrect'
+                        : error.message
+                    : error instanceof Error
+                      ? error.message
+                      : 'Erreur de connexion';
+            throw new Error(message);
         } finally {
             setIsLoading(false);
         }
@@ -69,13 +72,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const logout = async () => {
         try {
+            await unregisterPushToken();
+            const refreshToken = await getItem(STORAGE_KEYS.REFRESH_TOKEN);
+            await logoutRequest(refreshToken);
+        } finally {
             setUser(null);
             setToken(null);
-            await AsyncStorage.removeItem('user');
-            await AsyncStorage.removeItem('token');
-        } catch (error) {
-            console.error('Logout error:', error);
-            throw error;
+            await flushSession();
+            // Vide tout le cache react-query (sinon la session suivante voit
+            // les donnees scope-ees du user precedent).
+            queryClient.clear();
         }
     };
 

@@ -1,65 +1,100 @@
-import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
-import { useThemeColors } from '@/hooks/useThemeColors';
+import { Tabs } from "expo-router";
+import { StyleSheet } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Icon, { IconName } from "@/components/ui/Icon";
+import { FontFamily, Typography } from "@/constants/Typography";
+import { useOrderNotifications } from "@/hooks/useOrderNotifications";
+import { useThemeColors } from "@/hooks/useThemeColors";
 
 export default function SupervisorLayout() {
     const colors = useThemeColors();
+    const insets = useSafeAreaInsets();
+    useOrderNotifications("staff");
 
     return (
         <Tabs
             screenOptions={{
                 headerShown: false,
-                tabBarActiveTintColor: colors.supervisorPrimary,
-                tabBarInactiveTintColor: colors.textSecondary,
+                tabBarActiveTintColor: colors.terra600,
+                tabBarInactiveTintColor: colors.ink500,
+                tabBarStyle: {
+                    backgroundColor: colors.paper,
+                    borderTopColor: colors.ink200,
+                    borderTopWidth: StyleSheet.hairlineWidth,
+                    // Compense la nav bar système Android (boutons III O <)
+                    // sinon le tab bar passe DESSOUS (edgeToEdge activé).
+                    height: 70 + insets.bottom,
+                    paddingTop: 8,
+                    paddingBottom: 10 + insets.bottom,
+                },
+                tabBarLabelStyle: {
+                    fontFamily: FontFamily.uiMedium,
+                    fontSize: Typography.fontSize.micro,
+                },
             }}
         >
             <Tabs.Screen
+                name="pesee"
+                options={{
+                    title: "Pesée",
+                    tabBarIcon: ({ color, focused }) => (
+                        <TabIcon name="weight" color={color} focused={focused} />
+                    ),
+                }}
+            />
+            <Tabs.Screen
+                name="triage"
+                options={{
+                    title: "Triage",
+                    tabBarIcon: ({ color, focused }) => (
+                        <TabIcon name="filter" color={color} focused={focused} />
+                    ),
+                }}
+            />
+            <Tabs.Screen
                 name="production"
                 options={{
-                    title: 'Production',
-                    tabBarIcon: ({ color }) => <TabIcon icon="🏭" color={color} />,
+                    title: "Production",
+                    tabBarIcon: ({ color, focused }) => (
+                        <TabIcon name="boxes" color={color} focused={focused} />
+                    ),
                 }}
             />
             <Tabs.Screen
                 name="machines"
                 options={{
-                    title: 'Machines',
-                    tabBarIcon: ({ color }) => <TabIcon icon="⚙️" color={color} />,
-                }}
-            />
-            <Tabs.Screen
-                name="quality"
-                options={{
-                    title: 'Qualité',
-                    tabBarIcon: ({ color }) => <TabIcon icon="✅" color={color} />,
-                }}
-            />
-            <Tabs.Screen
-                name="team"
-                options={{
-                    title: 'Équipe',
-                    tabBarIcon: ({ color }) => <TabIcon icon="👥" color={color} />,
+                    title: "Machines",
+                    tabBarIcon: ({ color, focused }) => (
+                        <TabIcon name="settings" color={color} focused={focused} />
+                    ),
                 }}
             />
             <Tabs.Screen
                 name="profile"
                 options={{
-                    title: 'Profil',
-                    tabBarIcon: ({ color }) => <TabIcon icon="👤" color={color} />,
+                    title: "Profil",
+                    tabBarIcon: ({ color, focused }) => (
+                        <TabIcon name="user" color={color} focused={focused} />
+                    ),
                 }}
             />
-            {/* Hidden screens */}
-            <Tabs.Screen
-                name="reports"
-                options={{
-                    href: null,
-                    title: 'Rapports',
-                }}
-            />
+
+            {/* Push-only (accessibles via lien direct mais hors tabbar) */}
+            <Tabs.Screen name="quality" options={{ href: null, title: "Qualité" }} />
+            <Tabs.Screen name="team" options={{ href: null, title: "Équipe" }} />
+            <Tabs.Screen name="reports" options={{ href: null, title: "Rapports" }} />
         </Tabs>
     );
 }
 
-function TabIcon({ icon, color }: { icon: string; color: string }) {
-    return <Text style={{ fontSize: 24, color }}>{icon}</Text>;
+function TabIcon({
+    name,
+    color,
+    focused,
+}: {
+    name: IconName;
+    color: string;
+    focused: boolean;
+}) {
+    return <Icon name={name} size={20} color={color} stroke={focused ? 2 : 1.6} />;
 }

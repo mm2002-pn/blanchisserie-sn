@@ -1,18 +1,29 @@
-import React, { useState } from 'react';
+import { useMemo, useRef, useState } from "react";
 import {
-    View,
-    Text,
-    StyleSheet,
+    Platform,
+    Pressable,
     ScrollView,
-    TouchableOpacity,
-    SafeAreaView,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { useThemeColors } from '@/hooks/useThemeColors';
-import Card from '@/components/ui/Card';
-import ThemedText from '@/components/ui/ThemedText';
-import { Spacing } from '@/constants/Spacing';
-import { Typography } from '@/constants/Typography';
+    StyleSheet,
+    Switch,
+    Text,
+    View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import MapView, { Marker, PROVIDER_DEFAULT, Polyline, Region } from "react-native-maps";
+
+import Card from "@/components/ui/Card";
+import Icon, { IconName } from "@/components/ui/Icon";
+import ThemedText from "@/components/ui/ThemedText";
+import { FontFamily, Typography } from "@/constants/Typography";
+import { useThemeColors } from "@/hooks/useThemeColors";
+import { useOrders } from "@/hooks/useOrders";
+import { useOrdersRealtime } from "@/hooks/useOrdersRealtime";
+import { formatDayHeader, formatHour, isToday } from "@/lib/date";
+import type { Order } from "@/types/order.types";
+
+type StopStatus = "completed" | "current" | "upcoming";
+type StopType = "collecte" | "livraison";
 
 type RouteStop = {
     id: string;
@@ -20,8 +31,40 @@ type RouteStop = {
     address: string;
     distance: string;
     estimatedTime: string;
-    status: 'completed' | 'current' | 'upcoming';
-    type: 'collecte' | 'livraison';
+    status: StopStatus;
+    type: StopType;
+    lat: number;
+    lng: number;
+};
+
+/** Pseudo-position : on étale les arrêts autour du centre Dakar tant que
+ *  la BDD n'expose pas de geoLat/geoLng par client. */
+function pseudoCoord(seed: string, base: { latitude: number; longitude: number }) {
+    let h = 0;
+    for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+    const dx = ((h & 0xff) / 255 - 0.5) * 0.04;
+    const dy = (((h >> 8) & 0xff) / 255 - 0.5) * 0.04;
+    return { latitude: base.latitude + dy, longitude: base.longitude + dx };
+}
+
+function deriveStopType(o: Order): StopType {
+    return o.status === "ready" || o.status === "delivered" ? "livraison" : "collecte";
+}
+
+function deriveStopStatus(o: Order): StopStatus {
+    if (o.status === "delivered" || o.status === "collected") return "completed";
+    if (o.status === "in_progress" || o.status === "ready") return "current";
+    return "upcoming";
+}
+
+/** Position de départ (atelier Dakar Nord) */
+const DRIVER_ORIGIN = { latitude: 14.7558, longitude: -17.4440 };
+
+const DAKAR_REGION: Region = {
+    latitude: 14.7100,
+    longitude: -17.4600,
+    latitudeDelta: 0.10,
+    longitudeDelta: 0.08,
 };
 
 export default function NavigationScreen() {
@@ -30,566 +73,938 @@ export default function NavigationScreen() {
 
     const [routeOptimized, setRouteOptimized] = useState(true);
     const [trafficEnabled, setTrafficEnabled] = useState(true);
+    const [filter, setFilter] = useState<"all" | "collecte" | "livraison">("all");
 
-    const routeStops: RouteStop[] = [
-        {
-            id: '1',
-            name: 'King Fahd Palace',
-            address: 'Route de la Corniche Ouest',
-            distance: '0.5 km',
-            estimatedTime: '2 min',
-            status: 'current',
-            type: 'collecte',
-        },
-        {
-            id: '2',
-            name: 'Hôtel Djoloff',
-            address: 'Avenue Cheikh Anta Diop',
-            distance: '4.2 km',
-            estimatedTime: '12 min',
-            status: 'upcoming',
-            type: 'livraison',
-        },
-        {
-            id: '3',
-            name: 'Radisson Blu',
-            address: 'Route de la Corniche Ouest',
-            distance: '6.8 km',
-            estimatedTime: '18 min',
-            status: 'upcoming',
-            type: 'collecte',
-        },
+    useOrdersRealtime();
+    const { data: liveOrders } = useOrders();
+
+    /** Liste des arrêts du jour, dérivée des commandes API. */
+    const todayStops = useMemo<RouteStop[]>(() => {
+        if (!liveOrders) return [];
+        const base = { latitude: DAKAR_REGION.latitude, longitude: DAKAR_REGION.longitude };
+        return liveOrders
+            .filter((o) => {
+                const type = deriveStopType(o);
+                const anchor =
+                    type === "livraison"
+                        ? o.deliveryPlannedAt ?? o.collectionPlannedAt ?? o.deliveryDate ?? o.collectionDate
+                        : o.collectionPlannedAt ?? o.collectionDate;
+                return isToday(anchor);
+            })
+            .map((o) => {
+                const type = deriveStopType(o);
+                const anchor =
+                    type === "livraison"
+                        ? o.deliveryPlannedAt ?? o.collectionPlannedAt ?? o.deliveryDate ?? o.collectionDate
+                        : o.collectionPlannedAt ?? o.collectionDate;
+                const coord = pseudoCoord(o.id, base);
+                return {
+                    id: o.id,
+                    name: o.hotelName || o.orderNumber,
+                    address: "—",
+                    distance: "—",
+                    estimatedTime: formatHour(anchor),
+                    status: deriveStopStatus(o),
+                    type,
+                    lat: coord.latitude,
+                    lng: coord.longitude,
+                };
+            });
+    }, [liveOrders]);
+
+    const filteredStops = useMemo(
+        () => (filter === "all" ? todayStops : todayStops.filter((s) => s.type === filter)),
+        [todayStops, filter],
+    );
+
+    const collectsCount = todayStops.filter((s) => s.type === "collecte").length;
+    const deliveriesCount = todayStops.filter((s) => s.type === "livraison").length;
+
+    const routeStops: RouteStop[] = filteredStops;
+
+    const mapRef = useRef<MapView | null>(null);
+    const polylineCoords = [
+        DRIVER_ORIGIN,
+        ...routeStops.map((s) => ({ latitude: s.lat, longitude: s.lng })),
     ];
 
-    const currentStop = routeStops.find(stop => stop.status === 'current');
-    const totalDistance = '24.5 km';
-    const totalTime = '1h 15min';
+    const recenter = () => {
+        mapRef.current?.animateToRegion(DAKAR_REGION, 450);
+    };
+
+    const currentStop = routeStops.find((s) => s.status === "current");
+    const totalDistance = "24,5 km";
+    const totalTime = "1 h 15 min";
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity
-                    onPress={() => router.back()}
-                    style={styles.backButton}
-                >
-                    <Text style={styles.backIcon}>←</Text>
-                </TouchableOpacity>
-                <ThemedText variate="headline" color="textPrimary">
-                    Navigation
-                </ThemedText>
-                <TouchableOpacity style={styles.iconButton}>
-                    <Text style={styles.iconText}>⚙️</Text>
-                </TouchableOpacity>
+        <SafeAreaView
+            edges={["top"]}
+            style={[styles.container, { backgroundColor: colors.paper2 }]}
+        >
+            <View
+                style={[
+                    styles.header,
+                    { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
+                ]}
+            >
+                <Pressable onPress={() => router.back()} hitSlop={8}>
+                    <Icon name="chevLeft" size={20} color={colors.ink800} />
+                </Pressable>
+                <ThemedText variate="title">Navigation</ThemedText>
+                <Pressable hitSlop={8}>
+                    <Icon name="settings" size={18} color={colors.ink800} />
+                </Pressable>
             </View>
 
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
-                {/* Map Placeholder */}
-                <Card style={styles.mapCard}>
-                    <View style={styles.mapPlaceholder}>
-                        <Text style={styles.mapIcon}>🗺️</Text>
-                        <ThemedText variate="subtitle2" color="textSecondary">
-                            Carte interactive
-                        </ThemedText>
-                        <ThemedText variate="caption" color="textSecondary" style={{ textAlign: 'center' }}>
-                            La carte GPS s'affichera ici{'\n'}(Leaflet.js à intégrer)
-                        </ThemedText>
-                    </View>
+            <View style={[styles.filterRow, { backgroundColor: colors.paper, borderBottomColor: colors.ink200 }]}>
+                <FilterChip
+                    label={`Tous · ${todayStops.length}`}
+                    active={filter === "all"}
+                    onPress={() => setFilter("all")}
+                />
+                <FilterChip
+                    label={`Collectes · ${collectsCount}`}
+                    icon="package"
+                    active={filter === "collecte"}
+                    onPress={() => setFilter("collecte")}
+                />
+                <FilterChip
+                    label={`Livraisons · ${deliveriesCount}`}
+                    icon="truck"
+                    active={filter === "livraison"}
+                    onPress={() => setFilter("livraison")}
+                />
+            </View>
 
-                    {/* Map Controls */}
-                    <View style={styles.mapControls}>
-                        <TouchableOpacity style={styles.controlButton}>
-                            <Text style={styles.controlIcon}>📍</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.controlButton}>
-                            <Text style={styles.controlIcon}>➕</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.controlButton}>
-                            <Text style={styles.controlIcon}>➖</Text>
-                        </TouchableOpacity>
-                    </View>
-                </Card>
+            <Text style={[styles.dayHeader, { color: colors.ink500, backgroundColor: colors.paper2 }]}>
+                Tournée · {formatDayHeader()}
+            </Text>
 
-                {/* Current Destination */}
-                {currentStop && (
-                    <Card style={[styles.currentCard, { backgroundColor: colors.driverPrimary + '10' }]}>
-                        <View style={styles.currentHeader}>
-                            <View style={{ flex: 1 }}>
-                                <View style={styles.currentBadge}>
-                                    <Text style={styles.currentBadgeIcon}>🎯</Text>
-                                    <ThemedText variate="caption" style={{ color: colors.driverPrimary }}>
-                                        Prochaine destination
-                                    </ThemedText>
-                                </View>
-                                <ThemedText variate="subtitle1" color="textPrimary" style={{ marginTop: Spacing.xs }}>
-                                    {currentStop.name}
-                                </ThemedText>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    {currentStop.address}
-                                </ThemedText>
-                            </View>
-                        </View>
-
-                        <View style={styles.currentStats}>
-                            <View style={styles.statItem}>
-                                <Text style={styles.statIcon}>📍</Text>
-                                <ThemedText variate="subtitle3" color="textPrimary">
-                                    {currentStop.distance}
-                                </ThemedText>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    Distance
-                                </ThemedText>
-                            </View>
-                            <View style={styles.statItem}>
-                                <Text style={styles.statIcon}>🕐</Text>
-                                <ThemedText variate="subtitle3" color="textPrimary">
-                                    {currentStop.estimatedTime}
-                                </ThemedText>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    Temps estimé
-                                </ThemedText>
-                            </View>
-                            <View style={styles.statItem}>
-                                <Text style={styles.statIcon}>🚗</Text>
-                                <ThemedText variate="subtitle3" color="textPrimary">
-                                    Normal
-                                </ThemedText>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    Trafic
-                                </ThemedText>
-                            </View>
-                        </View>
-
-                        <TouchableOpacity
-                            style={[styles.navigationButton, { backgroundColor: colors.driverPrimary }]}
-                        >
-                            <Text style={styles.navigationButtonText}>🧭 Démarrer la navigation</Text>
-                        </TouchableOpacity>
-                    </Card>
-                )}
-
-                {/* Route Options */}
-                <Card style={styles.optionsCard}>
-                    <ThemedText variate="subtitle2" color="textPrimary" style={{ marginBottom: Spacing.md }}>
-                        Options de route
-                    </ThemedText>
-
-                    <TouchableOpacity
-                        style={styles.optionRow}
-                        onPress={() => setRouteOptimized(!routeOptimized)}
-                    >
-                        <View style={styles.optionLeft}>
-                            <Text style={styles.optionIcon}>🎯</Text>
-                            <View>
-                                <ThemedText variate="body3" color="textPrimary">
-                                    Route optimisée
-                                </ThemedText>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    Trajet le plus rapide
-                                </ThemedText>
-                            </View>
-                        </View>
+            <ScrollView
+                contentContainerStyle={styles.content}
+                showsVerticalScrollIndicator={false}
+            >
+                {/* Map */}
+                <Card padding={0} style={[styles.mapCard, { overflow: "hidden" }]}>
+                    {Platform.OS === "web" ? (
                         <View
                             style={[
-                                styles.toggle,
-                                routeOptimized && { backgroundColor: colors.driverPrimary },
+                                styles.mapPlaceholder,
+                                { backgroundColor: colors.paper2 },
                             ]}
                         >
-                            <View
-                                style={[
-                                    styles.toggleDot,
-                                    routeOptimized && styles.toggleDotActive,
-                                ]}
-                            />
+                            <Icon name="map" size={40} color={colors.ink400} />
+                            <Text style={[styles.mapTitle, { color: colors.ink700 }]}>
+                                Carte disponible sur mobile
+                            </Text>
+                            <Text style={[styles.mapSub, { color: colors.ink500 }]}>
+                                react-native-maps · iOS · Android
+                            </Text>
                         </View>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={styles.optionRow}
-                        onPress={() => setTrafficEnabled(!trafficEnabled)}
-                    >
-                        <View style={styles.optionLeft}>
-                            <Text style={styles.optionIcon}>🚦</Text>
-                            <View>
-                                <ThemedText variate="body3" color="textPrimary">
-                                    Trafic en temps réel
-                                </ThemedText>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    Éviter les embouteillages
-                                </ThemedText>
-                            </View>
-                        </View>
-                        <View
-                            style={[
-                                styles.toggle,
-                                trafficEnabled && { backgroundColor: colors.driverPrimary },
-                            ]}
-                        >
-                            <View
-                                style={[
-                                    styles.toggleDot,
-                                    trafficEnabled && styles.toggleDotActive,
-                                ]}
-                            />
-                        </View>
-                    </TouchableOpacity>
-                </Card>
-
-                {/* Route Overview */}
-                <Card style={styles.routeCard}>
-                    <View style={styles.routeHeader}>
-                        <ThemedText variate="subtitle2" color="textPrimary">
-                            Aperçu de la tournée
-                        </ThemedText>
-                        <View style={styles.routeStats}>
-                            <View style={styles.routeStat}>
-                                <Text style={styles.routeStatIcon}>📍</Text>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    {totalDistance}
-                                </ThemedText>
-                            </View>
-                            <View style={styles.routeStat}>
-                                <Text style={styles.routeStatIcon}>🕐</Text>
-                                <ThemedText variate="caption" color="textSecondary">
-                                    {totalTime}
-                                </ThemedText>
-                            </View>
-                        </View>
-                    </View>
-
-                    <View style={styles.stopsContainer}>
-                        {routeStops.map((stop, index) => (
-                            <View key={stop.id} style={styles.stopItem}>
-                                <View style={styles.stopTimeline}>
+                    ) : (
+                        <View style={styles.mapWrap}>
+                            <MapView
+                                ref={mapRef}
+                                provider={PROVIDER_DEFAULT}
+                                style={StyleSheet.absoluteFill}
+                                initialRegion={DAKAR_REGION}
+                                showsUserLocation
+                                showsMyLocationButton={false}
+                                showsCompass={false}
+                                showsScale={false}
+                                toolbarEnabled={false}
+                            >
+                                {/* Driver origin */}
+                                <Marker
+                                    coordinate={DRIVER_ORIGIN}
+                                    title="Atelier Dakar"
+                                    description="Point de départ"
+                                >
                                     <View
                                         style={[
-                                            styles.stopDot,
-                                            {
-                                                backgroundColor:
-                                                    stop.status === 'completed'
-                                                        ? '#22C55E'
-                                                        : stop.status === 'current'
-                                                        ? colors.driverPrimary
-                                                        : '#D1D5DB',
-                                            },
+                                            styles.originMarker,
+                                            { backgroundColor: colors.ink900, borderColor: colors.paper },
                                         ]}
                                     >
-                                        {stop.status === 'completed' && (
-                                            <Text style={styles.stopCheckIcon}>✓</Text>
-                                        )}
+                                        <Icon name="truck" size={12} color={colors.paper} />
                                     </View>
-                                    {index < routeStops.length - 1 && (
-                                        <View style={styles.stopLine} />
-                                    )}
-                                </View>
+                                </Marker>
 
-                                <View style={styles.stopContent}>
-                                    <View style={styles.stopInfo}>
-                                        <ThemedText variate="subtitle3" color="textPrimary">
-                                            {stop.name}
-                                        </ThemedText>
-                                        <ThemedText variate="caption" color="textSecondary">
-                                            {stop.address}
-                                        </ThemedText>
-                                        <View style={styles.stopMeta}>
+                                {/* Route stops */}
+                                {routeStops.map((stop, i) => {
+                                    const bg =
+                                        stop.status === "completed"
+                                            ? colors.ok600
+                                            : stop.status === "current"
+                                              ? colors.terra600
+                                              : colors.brand800;
+                                    return (
+                                        <Marker
+                                            key={stop.id}
+                                            coordinate={{
+                                                latitude: stop.lat,
+                                                longitude: stop.lng,
+                                            }}
+                                            title={stop.name}
+                                            description={`${stop.type === "collecte" ? "Collecte" : "Livraison"} · ${stop.distance}`}
+                                        >
                                             <View
                                                 style={[
-                                                    styles.typeBadge,
+                                                    styles.stopMarker,
                                                     {
-                                                        backgroundColor:
-                                                            stop.type === 'collecte'
-                                                                ? '#3B82F620'
-                                                                : '#10B98120',
+                                                        backgroundColor: bg,
+                                                        borderColor: colors.paper,
                                                     },
                                                 ]}
                                             >
                                                 <Text
                                                     style={[
-                                                        styles.typeBadgeText,
-                                                        {
-                                                            color:
-                                                                stop.type === 'collecte'
-                                                                    ? '#3B82F6'
-                                                                    : '#10B981',
-                                                        },
+                                                        styles.stopMarkerText,
+                                                        { color: colors.paper },
                                                     ]}
                                                 >
-                                                    {stop.type === 'collecte' ? '📦 Collecte' : '✅ Livraison'}
+                                                    {i + 1}
                                                 </Text>
                                             </View>
-                                            <ThemedText variate="caption" color="textSecondary">
-                                                {stop.distance} • {stop.estimatedTime}
-                                            </ThemedText>
-                                        </View>
-                                    </View>
-                                </View>
+                                        </Marker>
+                                    );
+                                })}
+
+                                {/* Polyline linking stops */}
+                                <Polyline
+                                    coordinates={polylineCoords}
+                                    strokeColor={colors.brand800}
+                                    strokeWidth={3}
+                                    lineDashPattern={[6, 4]}
+                                />
+                            </MapView>
+
+                            <View style={styles.mapControls}>
+                                <MapControl icon="plus" onPress={() => {
+                                    mapRef.current?.getCamera().then((cam) => {
+                                        mapRef.current?.animateCamera(
+                                            { zoom: (cam.zoom ?? 13) + 1 },
+                                            { duration: 250 },
+                                        );
+                                    });
+                                }} />
+                                <MapControl icon="minus" onPress={() => {
+                                    mapRef.current?.getCamera().then((cam) => {
+                                        mapRef.current?.animateCamera(
+                                            { zoom: (cam.zoom ?? 13) - 1 },
+                                            { duration: 250 },
+                                        );
+                                    });
+                                }} />
+                                <MapControl icon="search" onPress={recenter} />
                             </View>
-                        ))}
-                    </View>
+                        </View>
+                    )}
                 </Card>
 
-                {/* Quick Actions */}
-                <View style={styles.quickActions}>
-                    <TouchableOpacity style={styles.quickActionButton}>
-                        <Text style={styles.quickActionIcon}>📞</Text>
-                        <ThemedText variate="caption" color="textSecondary">
-                            Appeler
-                        </ThemedText>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.quickActionButton}>
-                        <Text style={styles.quickActionIcon}>⚠️</Text>
-                        <ThemedText variate="caption" color="textSecondary">
-                            Incident
-                        </ThemedText>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.quickActionButton}>
-                        <Text style={styles.quickActionIcon}>⏸️</Text>
-                        <ThemedText variate="caption" color="textSecondary">
-                            Pause
-                        </ThemedText>
-                    </TouchableOpacity>
+                {/* Current destination */}
+                {currentStop && (
+                    <Card
+                        padding={16}
+                        style={[
+                            styles.currentCard,
+                            {
+                                backgroundColor: colors.brand900,
+                                borderColor: colors.brand900,
+                            },
+                        ]}
+                    >
+                        <View style={styles.currentTop}>
+                            <Text
+                                style={[styles.currentCaps, { color: colors.brand100 }]}
+                            >
+                                Prochaine destination
+                            </Text>
+                            <View
+                                style={[
+                                    styles.typePill,
+                                    {
+                                        backgroundColor:
+                                            currentStop.type === "collecte"
+                                                ? colors.brand700
+                                                : colors.baobab600,
+                                    },
+                                ]}
+                            >
+                                <Icon
+                                    name={
+                                        currentStop.type === "collecte" ? "package" : "truck"
+                                    }
+                                    size={11}
+                                    color={colors.paper}
+                                />
+                                <Text
+                                    style={[styles.typePillText, { color: colors.paper }]}
+                                >
+                                    {currentStop.type === "collecte" ? "Collecte" : "Livraison"}
+                                </Text>
+                            </View>
+                        </View>
+                        <Text
+                            style={[styles.currentName, { color: colors.paper }]}
+                        >
+                            {currentStop.name}
+                        </Text>
+                        <Text
+                            style={[styles.currentAddress, { color: colors.brand100 }]}
+                        >
+                            {currentStop.address}
+                        </Text>
+
+                        <View
+                            style={[
+                                styles.currentStats,
+                                { borderTopColor: colors.brand700 },
+                            ]}
+                        >
+                            <CurrentStat
+                                icon="route"
+                                value={currentStop.distance}
+                                label="Distance"
+                            />
+                            <CurrentStat
+                                icon="clock"
+                                value={currentStop.estimatedTime}
+                                label="Temps"
+                            />
+                            <CurrentStat icon="truck" value="Fluide" label="Trafic" />
+                        </View>
+
+                        <Pressable
+                            style={[
+                                styles.goCta,
+                                { backgroundColor: colors.terra600 },
+                            ]}
+                        >
+                            <Icon name="route" size={14} color={colors.paper} />
+                            <Text style={[styles.goCtaText, { color: colors.paper }]}>
+                                Démarrer la navigation
+                            </Text>
+                            <Icon name="arrowRight" size={14} color={colors.paper} />
+                        </Pressable>
+                    </Card>
+                )}
+
+                {/* Options */}
+                <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
+                    Options de route
+                </ThemedText>
+                <Card padding={0} style={{ marginBottom: 14, overflow: "hidden" }}>
+                    <OptionRow
+                        icon="spark"
+                        label="Route optimisée"
+                        sub="Trajet le plus rapide"
+                        value={routeOptimized}
+                        onValueChange={setRouteOptimized}
+                        withDivider
+                    />
+                    <OptionRow
+                        icon="alert"
+                        label="Trafic en temps réel"
+                        sub="Éviter les embouteillages"
+                        value={trafficEnabled}
+                        onValueChange={setTrafficEnabled}
+                    />
+                </Card>
+
+                {/* Route overview */}
+                <View style={styles.routeHeader}>
+                    <ThemedText variate="caps" color="ink500">
+                        Arrêts du jour · {routeStops.length}
+                    </ThemedText>
+                    <View style={styles.routeStats}>
+                        <View style={styles.routeStat}>
+                            <Icon name="route" size={11} color={colors.ink500} />
+                            <Text style={[styles.routeStatText, { color: colors.ink700 }]}>
+                                {totalDistance}
+                            </Text>
+                        </View>
+                        <View style={styles.routeStat}>
+                            <Icon name="clock" size={11} color={colors.ink500} />
+                            <Text style={[styles.routeStatText, { color: colors.ink700 }]}>
+                                {totalTime}
+                            </Text>
+                        </View>
+                    </View>
+                </View>
+
+                <Card padding={14}>
+                    {routeStops.length === 0 ? (
+                        <View style={styles.emptyMap}>
+                            <Icon name="map" size={32} color={colors.ink400} />
+                            <Text style={[styles.emptyMapText, { color: colors.ink500 }]}>
+                                {filter === "all"
+                                    ? "Aucun arrêt prévu aujourd'hui"
+                                    : filter === "collecte"
+                                      ? "Aucune collecte aujourd'hui"
+                                      : "Aucune livraison aujourd'hui"}
+                            </Text>
+                        </View>
+                    ) : (
+                        <View style={styles.stopsList}>
+                            {routeStops.map((stop, i) => (
+                                <RouteStopRow
+                                    key={stop.id}
+                                    stop={stop}
+                                    isLast={i === routeStops.length - 1}
+                                />
+                            ))}
+                        </View>
+                    )}
+                </Card>
+
+                {/* Quick actions */}
+                <View style={styles.quickRow}>
+                    <QuickAction icon="phone" label="Appeler" />
+                    <QuickAction icon="alert" label="Incident" />
+                    <QuickAction icon="clock" label="Pause" />
                 </View>
             </ScrollView>
         </SafeAreaView>
     );
 }
 
+/* ---------- sous-composants ---------- */
+
+function FilterChip({
+    label,
+    icon,
+    active,
+    onPress,
+}: {
+    label: string;
+    icon?: IconName;
+    active: boolean;
+    onPress: () => void;
+}) {
+    const colors = useThemeColors();
+    return (
+        <Pressable
+            onPress={onPress}
+            style={[
+                styles.filterChip,
+                {
+                    backgroundColor: active ? colors.brand800 : colors.paper2,
+                    borderColor: active ? colors.brand800 : colors.ink200,
+                },
+            ]}
+        >
+            {icon && (
+                <Icon
+                    name={icon}
+                    size={11}
+                    color={active ? colors.paper : colors.ink700}
+                />
+            )}
+            <Text
+                style={[
+                    styles.filterChipText,
+                    { color: active ? colors.paper : colors.ink700 },
+                ]}
+            >
+                {label}
+            </Text>
+        </Pressable>
+    );
+}
+
+function MapControl({
+    icon,
+    onPress,
+}: {
+    icon: IconName;
+    onPress?: () => void;
+}) {
+    const colors = useThemeColors();
+    return (
+        <Pressable
+            onPress={onPress}
+            style={[
+                styles.mapCtl,
+                { backgroundColor: colors.paper, borderColor: colors.ink200 },
+            ]}
+        >
+            <Icon name={icon} size={14} color={colors.ink700} />
+        </Pressable>
+    );
+}
+
+function CurrentStat({
+    icon,
+    value,
+    label,
+}: {
+    icon: IconName;
+    value: string;
+    label: string;
+}) {
+    const colors = useThemeColors();
+    return (
+        <View style={{ flex: 1 }}>
+            <View style={styles.currentStatIcon}>
+                <Icon name={icon} size={12} color={colors.brand100} />
+                <Text
+                    style={[styles.currentStatValue, { color: colors.paper }]}
+                >
+                    {value}
+                </Text>
+            </View>
+            <Text style={[styles.currentStatLabel, { color: colors.brand100 }]}>
+                {label}
+            </Text>
+        </View>
+    );
+}
+
+function OptionRow({
+    icon,
+    label,
+    sub,
+    value,
+    onValueChange,
+    withDivider = false,
+}: {
+    icon: IconName;
+    label: string;
+    sub: string;
+    value: boolean;
+    onValueChange: (v: boolean) => void;
+    withDivider?: boolean;
+}) {
+    const colors = useThemeColors();
+    return (
+        <View
+            style={[
+                styles.optionRow,
+                withDivider && {
+                    borderBottomColor: colors.ink200,
+                    borderBottomWidth: StyleSheet.hairlineWidth,
+                },
+            ]}
+        >
+            <View
+                style={[styles.optionIcon, { backgroundColor: colors.paper2 }]}
+            >
+                <Icon name={icon} size={14} color={colors.ink700} />
+            </View>
+            <View style={{ flex: 1 }}>
+                <Text style={[styles.optionLabel, { color: colors.ink900 }]}>
+                    {label}
+                </Text>
+                <Text style={[styles.optionSub, { color: colors.ink500 }]}>
+                    {sub}
+                </Text>
+            </View>
+            <Switch
+                value={value}
+                onValueChange={onValueChange}
+                trackColor={{ false: colors.ink200, true: colors.brand500 }}
+                thumbColor={value ? colors.brand800 : colors.paper}
+            />
+        </View>
+    );
+}
+
+function RouteStopRow({
+    stop,
+    isLast,
+}: {
+    stop: RouteStop;
+    isLast: boolean;
+}) {
+    const colors = useThemeColors();
+    const dotColor =
+        stop.status === "completed"
+            ? colors.ok600
+            : stop.status === "current"
+              ? colors.baobab600
+              : colors.ink200;
+
+    return (
+        <View style={styles.stopRow}>
+            <View style={styles.stopTimeline}>
+                <View
+                    style={[
+                        styles.stopDot,
+                        {
+                            backgroundColor: dotColor,
+                            borderColor:
+                                stop.status === "current" ? colors.baobab600 : "transparent",
+                            borderWidth: stop.status === "current" ? 3 : 0,
+                        },
+                    ]}
+                >
+                    {stop.status === "completed" && (
+                        <Icon name="check" size={11} color={colors.paper} />
+                    )}
+                </View>
+                {!isLast && (
+                    <View
+                        style={[styles.stopLine, { backgroundColor: colors.ink200 }]}
+                    />
+                )}
+            </View>
+
+            <View style={styles.stopBody}>
+                <Text style={[styles.stopName, { color: colors.ink900 }]}>
+                    {stop.name}
+                </Text>
+                <Text style={[styles.stopAddress, { color: colors.ink500 }]}>
+                    {stop.address}
+                </Text>
+                <View style={styles.stopFoot}>
+                    <View
+                        style={[
+                            styles.typePillSmall,
+                            {
+                                backgroundColor:
+                                    stop.type === "collecte"
+                                        ? colors.brand100
+                                        : colors.baobab100,
+                            },
+                        ]}
+                    >
+                        <Icon
+                            name={stop.type === "collecte" ? "package" : "truck"}
+                            size={10}
+                            color={
+                                stop.type === "collecte"
+                                    ? colors.brand800
+                                    : colors.baobab700
+                            }
+                        />
+                        <Text
+                            style={[
+                                styles.typePillSmallText,
+                                {
+                                    color:
+                                        stop.type === "collecte"
+                                            ? colors.brand800
+                                            : colors.baobab700,
+                                },
+                            ]}
+                        >
+                            {stop.type === "collecte" ? "Collecte" : "Livraison"}
+                        </Text>
+                    </View>
+                    <Text style={[styles.stopMeta, { color: colors.ink500 }]}>
+                        {stop.distance} · {stop.estimatedTime}
+                    </Text>
+                </View>
+            </View>
+        </View>
+    );
+}
+
+function QuickAction({ icon, label }: { icon: IconName; label: string }) {
+    const colors = useThemeColors();
+    return (
+        <Pressable
+            style={[
+                styles.quickBtn,
+                { backgroundColor: colors.paper, borderColor: colors.ink200 },
+            ]}
+        >
+            <View
+                style={[styles.quickIcon, { backgroundColor: colors.paper2 }]}
+            >
+                <Icon name={icon} size={16} color={colors.ink700} />
+            </View>
+            <Text style={[styles.quickLabel, { color: colors.ink700 }]}>
+                {label}
+            </Text>
+        </Pressable>
+    );
+}
+
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
+    container: { flex: 1 },
     header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: Spacing.padding.screen,
-        paddingTop: Spacing.sm,
-        paddingBottom: Spacing.md,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
     },
-    backButton: {
-        width: 40,
-        height: 40,
-        justifyContent: 'center',
-        alignItems: 'center',
+    content: { padding: 16, paddingBottom: 120 },
+    sectionLabel: { marginBottom: 10, paddingLeft: 4 },
+
+    filterRow: {
+        flexDirection: "row",
+        gap: 8,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderBottomWidth: StyleSheet.hairlineWidth,
     },
-    backIcon: {
-        fontSize: 28,
-        color: '#374151',
+    filterChip: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 5,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 999,
+        borderWidth: StyleSheet.hairlineWidth,
     },
-    iconButton: {
-        width: 40,
-        height: 40,
-        justifyContent: 'center',
-        alignItems: 'center',
+    filterChipText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.tiny,
     },
-    iconText: {
-        fontSize: 24,
+    dayHeader: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
+        paddingHorizontal: 16,
+        paddingVertical: 6,
+        textTransform: "capitalize",
     },
-    content: {
-        padding: Spacing.padding.screen,
-        paddingBottom: Spacing.xxxl,
+    emptyMap: {
+        alignItems: "center",
+        gap: 10,
+        paddingVertical: 30,
     },
-    mapCard: {
-        marginBottom: Spacing.lg,
-        padding: 0,
-        overflow: 'hidden',
+    emptyMapText: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.tiny,
+    },
+
+    // Map
+    mapCard: { marginBottom: 14 },
+    mapWrap: {
+        height: 280,
+        position: "relative",
     },
     mapPlaceholder: {
-        height: 300,
-        backgroundColor: '#E5E7EB',
-        justifyContent: 'center',
-        alignItems: 'center',
+        height: 240,
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
     },
-    mapIcon: {
-        fontSize: 64,
-        marginBottom: Spacing.md,
+    mapTitle: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
+    },
+    mapSub: {
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.micro,
     },
     mapControls: {
-        position: 'absolute',
-        top: Spacing.md,
-        right: Spacing.md,
-        gap: Spacing.xs,
+        position: "absolute",
+        top: 12,
+        right: 12,
+        gap: 6,
     },
-    controlButton: {
-        width: 40,
-        height: 40,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 20,
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
+    mapCtl: {
+        width: 34,
+        height: 34,
+        borderRadius: 8,
+        alignItems: "center",
+        justifyContent: "center",
+        borderWidth: StyleSheet.hairlineWidth,
     },
-    controlIcon: {
+    originMarker: {
+        width: 28,
+        height: 28,
+        borderRadius: 8,
+        alignItems: "center",
+        justifyContent: "center",
+        borderWidth: 2,
+    },
+    stopMarker: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        alignItems: "center",
+        justifyContent: "center",
+        borderWidth: 2,
+    },
+    stopMarkerText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.tiny,
+    },
+
+    // Current card
+    currentCard: { marginBottom: 14 },
+    currentTop: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+    },
+    currentCaps: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.micro,
+        letterSpacing: 1.2,
+        textTransform: "uppercase",
+    },
+    typePill: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 999,
+    },
+    typePillText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.micro,
+    },
+    currentName: {
+        fontFamily: FontFamily.serifMedium,
         fontSize: 20,
+        letterSpacing: -0.3,
+        marginTop: 8,
     },
-    currentCard: {
-        marginBottom: Spacing.lg,
-    },
-    currentHeader: {
-        flexDirection: 'row',
-        marginBottom: Spacing.md,
-    },
-    currentBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.xs,
-    },
-    currentBadgeIcon: {
-        fontSize: 16,
+    currentAddress: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 2,
     },
     currentStats: {
-        flexDirection: 'row',
-        gap: Spacing.md,
-        marginBottom: Spacing.md,
+        flexDirection: "row",
+        gap: 12,
+        marginTop: 14,
+        paddingTop: 14,
+        borderTopWidth: StyleSheet.hairlineWidth,
     },
-    statItem: {
-        flex: 1,
-        alignItems: 'center',
+    currentStatIcon: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 5,
     },
-    statIcon: {
-        fontSize: 24,
-        marginBottom: Spacing.xs,
+    currentStatValue: {
+        fontFamily: FontFamily.monoMedium,
+        fontSize: Typography.fontSize.base,
     },
-    navigationButton: {
-        paddingVertical: Spacing.md,
-        borderRadius: Spacing.borderRadius.md,
-        alignItems: 'center',
+    currentStatLabel: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
+        marginTop: 3,
     },
-    navigationButtonText: {
-        color: '#FFFFFF',
+    goCta: {
+        marginTop: 14,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        paddingVertical: 12,
+        borderRadius: 10,
+    },
+    goCtaText: {
+        fontFamily: FontFamily.uiSemibold,
         fontSize: Typography.fontSize.sm,
-        fontWeight: Typography.fontWeight.semibold,
     },
-    optionsCard: {
-        marginBottom: Spacing.lg,
-    },
+
+    // Options
     optionRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: Spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
-    },
-    optionLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.md,
-        flex: 1,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
     },
     optionIcon: {
-        fontSize: 24,
-    },
-    toggle: {
-        width: 50,
-        height: 28,
-        backgroundColor: '#D1D5DB',
-        borderRadius: 14,
-        padding: 2,
-        justifyContent: 'center',
-    },
-    toggleDot: {
-        width: 24,
-        height: 24,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 12,
-    },
-    toggleDotActive: {
-        alignSelf: 'flex-end',
-    },
-    routeCard: {
-        marginBottom: Spacing.lg,
-    },
-    routeHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: Spacing.lg,
-    },
-    routeStats: {
-        flexDirection: 'row',
-        gap: Spacing.md,
-    },
-    routeStat: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.xs,
-    },
-    routeStatIcon: {
-        fontSize: 14,
-    },
-    stopsContainer: {
-        gap: Spacing.xs,
-    },
-    stopItem: {
-        flexDirection: 'row',
-        gap: Spacing.md,
-    },
-    stopTimeline: {
-        alignItems: 'center',
-        width: 32,
-    },
-    stopDot: {
         width: 32,
         height: 32,
-        borderRadius: 16,
-        justifyContent: 'center',
-        alignItems: 'center',
+        borderRadius: 8,
+        alignItems: "center",
+        justifyContent: "center",
     },
-    stopCheckIcon: {
-        fontSize: 16,
-        color: '#FFFFFF',
+    optionLabel: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.sm,
     },
-    stopLine: {
-        width: 2,
-        flex: 1,
-        backgroundColor: '#D1D5DB',
-        marginVertical: Spacing.xs,
+    optionSub: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 1,
     },
-    stopContent: {
-        flex: 1,
-        paddingBottom: Spacing.md,
+
+    // Route overview
+    routeHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 10,
+        paddingLeft: 4,
     },
-    stopInfo: {
-        gap: Spacing.xs,
+    routeStats: { flexDirection: "row", gap: 12 },
+    routeStat: { flexDirection: "row", alignItems: "center", gap: 4 },
+    routeStatText: {
+        fontFamily: FontFamily.monoMedium,
+        fontSize: Typography.fontSize.tiny,
+    },
+
+    stopsList: { gap: 2 },
+    stopRow: { flexDirection: "row", gap: 12 },
+    stopTimeline: { alignItems: "center", width: 24 },
+    stopDot: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    stopLine: { width: 2, flex: 1, marginVertical: 4, minHeight: 30 },
+    stopBody: { flex: 1, paddingBottom: 14 },
+    stopName: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
+    },
+    stopAddress: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 2,
+    },
+    stopFoot: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        marginTop: 6,
+    },
+    typePillSmall: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 999,
+    },
+    typePillSmallText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.micro,
     },
     stopMeta: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.md,
-        marginTop: Spacing.xs,
+        fontFamily: FontFamily.monoRegular,
+        fontSize: Typography.fontSize.micro,
     },
-    typeBadge: {
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: 2,
-        borderRadius: Spacing.borderRadius.sm,
+
+    // Quick actions
+    quickRow: {
+        flexDirection: "row",
+        gap: 10,
+        marginTop: 14,
     },
-    typeBadgeText: {
-        fontSize: Typography.fontSize.xs,
-        fontWeight: Typography.fontWeight.semibold,
-    },
-    quickActions: {
-        flexDirection: 'row',
-        gap: Spacing.md,
-    },
-    quickActionButton: {
+    quickBtn: {
         flex: 1,
-        backgroundColor: '#FFFFFF',
-        padding: Spacing.md,
-        borderRadius: Spacing.borderRadius.lg,
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 2,
+        alignItems: "center",
+        gap: 8,
+        paddingVertical: 12,
+        borderRadius: 12,
+        borderWidth: StyleSheet.hairlineWidth,
     },
-    quickActionIcon: {
-        fontSize: 28,
-        marginBottom: Spacing.xs,
+    quickIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    quickLabel: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.tiny,
     },
 });
