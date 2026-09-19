@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
     Alert,
     FlatList,
@@ -14,10 +14,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
-import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
 import StatusBadge, { OrderStatus as UIStatus } from "@/components/ui/StatusBadge";
-import ThemedText from "@/components/ui/ThemedText";
 import { OrderQrModal } from "@/components/shared/OrderQrModal";
 import { FontFamily, Typography } from "@/constants/Typography";
 import { useOrder } from "@/contexts/OrderContext";
@@ -44,24 +42,25 @@ const STATUS_TO_UI: Record<OrderStatus, UIStatus> = {
     cancelled: "Annulée",
 };
 
-/** Progression 0 → 1 pour la mini-timeline en bas de chaque carte */
-const STATUS_TO_PROGRESS: Record<OrderStatus, number> = {
-    pending: 0,
-    confirmed: 0,
-    collected: 0.25,
-    in_progress: 0.5,
-    ready: 0.75,
-    delivered: 1,
-    cancelled: 0,
+/** Étape textuelle affichée sous chaque carte — basée sur le vrai workflow API. */
+const STEP_LABEL: Record<string, string> = {
+    pending: "Confirmation attendue",
+    confirmed: "Collecte planifiée",
+    collection_planned: "Collecte planifiée",
+    collected: "En route vers l'atelier",
+    received: "Poids officiel enregistré",
+    triaged: "Étiquetage terminé",
+    in_production: "Lavage en cours",
+    ready: "En attente de livraison",
+    delivered: "Livraison signée",
+    invoiced: "Facture émise",
+    cancelled: "Commande annulée",
 };
-
-const TIMELINE_STEPS = ["Créée", "Collectée", "Traitement", "Prête", "Livrée"] as const;
 
 function countItems(order: Order): number {
     if (!order.services) return 0;
     return order.services.reduce(
-        (total, s) =>
-            total + (s.items?.reduce((sum, i) => sum + i.quantity, 0) || 0),
+        (total, s) => total + (s.items?.reduce((sum, i) => sum + i.quantity, 0) || 0),
         0,
     );
 }
@@ -139,7 +138,7 @@ export default function OrdersScreen() {
                         try {
                             setCancellingId(id);
                             await cancelOrder(id);
-                        } catch (err) {
+                        } catch {
                             Alert.alert("Erreur", "Impossible d'annuler la commande");
                         } finally {
                             setCancellingId(null);
@@ -151,44 +150,24 @@ export default function OrdersScreen() {
     };
 
     return (
-        <SafeAreaView
-            edges={["top"]}
-            style={[styles.container, { backgroundColor: colors.paper2 }]}
-        >
-            {/* Header */}
-            <View
-                style={[
-                    styles.header,
-                    { borderBottomColor: colors.ink200, backgroundColor: colors.paper },
-                ]}
-            >
-                <View style={{ flex: 1 }}>
-                    <ThemedText variate="title">Mes commandes</ThemedText>
-                    <ThemedText variate="caption" color="ink500" style={styles.headerSub}>
-                        {orders.length} commande{orders.length > 1 ? "s" : ""} ·{" "}
-                        {filtered.length} filtrée{filtered.length > 1 ? "s" : ""}
-                    </ThemedText>
+        <SafeAreaView edges={["top"]} style={[styles.container, { backgroundColor: colors.paper }]}>
+            {/* Header sticky */}
+            <View style={[styles.header, { backgroundColor: colors.paper }]}>
+                <View style={styles.headerTop}>
+                    <Text style={[styles.title, { color: colors.ink900 }]}>Mes commandes</Text>
+                    <Pressable
+                        style={[styles.addBtn, { backgroundColor: colors.brand900 }]}
+                        onPress={() => router.push("/(hotel)/new-order")}
+                        hitSlop={6}
+                    >
+                        <Icon name="plus" size={16} color="#FFFFFF" stroke={2.2} />
+                    </Pressable>
                 </View>
-                <Pressable
-                    style={[styles.iconChip, { backgroundColor: colors.ink100 }]}
-                    onPress={() => router.push("/(hotel)/new-order")}
-                    hitSlop={6}
-                >
-                    <Icon name="plus" size={16} color={colors.ink800} stroke={2} />
-                </Pressable>
-            </View>
 
-            {/* Tabs */}
-            <View
-                style={[
-                    styles.tabsWrap,
-                    { borderBottomColor: colors.ink200, backgroundColor: colors.paper },
-                ]}
-            >
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.tabsContent}
+                    contentContainerStyle={styles.filtersRow}
                 >
                     {FILTERS.map((f) => {
                         const active = selected === f.id;
@@ -197,17 +176,17 @@ export default function OrdersScreen() {
                                 key={f.id}
                                 onPress={() => setSelected(f.id)}
                                 style={[
-                                    styles.tab,
+                                    styles.filterChip,
                                     {
-                                        backgroundColor: active ? colors.ink900 : colors.paper,
-                                        borderColor: active ? colors.ink900 : colors.ink200,
+                                        backgroundColor: active ? colors.brand900 : colors.paper,
+                                        borderColor: active ? colors.brand900 : colors.ink200,
                                     },
                                 ]}
                             >
                                 <Text
                                     style={[
-                                        styles.tabText,
-                                        { color: active ? colors.paper : colors.ink700 },
+                                        styles.filterText,
+                                        { color: active ? "#FFFFFF" : colors.ink700 },
                                     ]}
                                 >
                                     {f.label}
@@ -216,10 +195,7 @@ export default function OrdersScreen() {
                         );
                     })}
                 </ScrollView>
-            </View>
 
-            {/* Search */}
-            <View style={[styles.searchWrap, { backgroundColor: colors.paper }]}>
                 <View style={[styles.search, { backgroundColor: colors.paper2 }]}>
                     <Icon name="search" size={14} color={colors.ink500} />
                     <TextInput
@@ -263,20 +239,12 @@ export default function OrdersScreen() {
                 ListEmptyComponent={
                     <View style={styles.empty}>
                         <Icon name="package" size={48} color={colors.ink300} stroke={1.2} />
-                        <ThemedText
-                            variate="subtitle"
-                            color="ink500"
-                            style={{ marginTop: 12 }}
-                        >
+                        <Text style={[styles.emptyTitle, { color: colors.ink600 }]}>
                             Aucune commande
-                        </ThemedText>
-                        <ThemedText
-                            variate="caption"
-                            color="ink500"
-                            style={{ marginTop: 4 }}
-                        >
+                        </Text>
+                        <Text style={[styles.emptySub, { color: colors.ink500 }]}>
                             Ajuste le filtre ou crée une nouvelle commande.
-                        </ThemedText>
+                        </Text>
                     </View>
                 }
             />
@@ -309,109 +277,64 @@ function OrderCard({
 }) {
     const colors = useThemeColors();
     const pieces = countItems(order);
-    const kg = (order.actualWeight ?? pieces * 0.3).toFixed(1).replace(".", ",");
-    const progress = STATUS_TO_PROGRESS[order.status];
-    const isCancelled = order.status === "cancelled";
+    const kg = (order.actualWeight ?? order.estimatedWeight ?? pieces * 0.3)
+        .toFixed(1)
+        .replace(".", ",");
+    const stepLabel = STEP_LABEL[order.apiStatus ?? order.status] ?? "—";
     const canCancel = order.status === "pending" || order.status === "confirmed";
-    const canShowQr =
-        order.status === "pending" || order.status === "confirmed";
+    const canShowQr = order.status === "pending" || order.status === "confirmed";
 
     return (
-        <Pressable onPress={onPress}>
-            <Card padding={14} style={{ marginBottom: 10 }}>
-                <View style={styles.cardTop}>
-                    <View style={{ flex: 1 }}>
-                        <Text style={[styles.code, { color: colors.ink500 }]}>
-                            {order.orderNumber}
-                        </Text>
-                        <Text style={[styles.date, { color: colors.ink900 }]}>
-                            {formatShort(order.createdAt)}
-                        </Text>
-                        <Text style={[styles.meta, { color: colors.ink600 }]}>
-                            <Text style={styles.mono}>{pieces}</Text> pièces ·{" "}
-                            <Text style={styles.mono}>{kg}</Text> kg
-                        </Text>
-                    </View>
-                    <StatusBadge status={STATUS_TO_UI[order.status]} />
-                </View>
+        <Pressable
+            onPress={onPress}
+            style={[styles.card, { backgroundColor: colors.paper, borderColor: colors.ink200 }]}
+        >
+            <View style={styles.cardTop}>
+                <Text style={[styles.cardId, { color: colors.ink900 }]}>{order.orderNumber}</Text>
+                <StatusBadge status={STATUS_TO_UI[order.status]} />
+            </View>
+            <Text style={[styles.cardDate, { color: colors.ink600 }]}>
+                {formatShort(order.createdAt)}
+            </Text>
+            <View style={styles.cardBottom}>
+                <Text style={[styles.cardKg, { color: colors.ink900 }]}>{kg} kg estimés</Text>
+                <Text style={[styles.cardStep, { color: colors.ink600 }]} numberOfLines={1}>
+                    {stepLabel}
+                </Text>
+            </View>
 
-                {/* Timeline */}
-                <View style={styles.timeline}>
-                    {TIMELINE_STEPS.map((_, i) => {
-                        const dotDone = !isCancelled && progress >= i / 4;
-                        const lineDone = !isCancelled && progress > i / 4;
-                        return (
-                            <Fragment key={i}>
-                                <View
-                                    style={[
-                                        styles.dot,
-                                        {
-                                            backgroundColor: dotDone
-                                                ? colors.brand800
-                                                : colors.ink200,
-                                        },
-                                    ]}
-                                />
-                                {i < TIMELINE_STEPS.length - 1 && (
-                                    <View
-                                        style={[
-                                            styles.line,
-                                            {
-                                                backgroundColor: lineDone
-                                                    ? colors.brand800
-                                                    : colors.ink200,
-                                            },
-                                        ]}
-                                    />
-                                )}
-                            </Fragment>
-                        );
-                    })}
+            {(canCancel || canShowQr) && (
+                <View style={styles.actions}>
+                    {canShowQr && (
+                        <Pressable
+                            onPress={(e) => {
+                                e.stopPropagation();
+                                onShowQr();
+                            }}
+                            style={[styles.action, { backgroundColor: colors.brand100 }]}
+                        >
+                            <Text style={[styles.actionText, { color: colors.brand800 }]}>QR</Text>
+                        </Pressable>
+                    )}
+                    {canCancel && (
+                        <Pressable
+                            onPress={(e) => {
+                                e.stopPropagation();
+                                onCancel();
+                            }}
+                            disabled={cancelling}
+                            style={[
+                                styles.action,
+                                { backgroundColor: colors.danger100, opacity: cancelling ? 0.6 : 1 },
+                            ]}
+                        >
+                            <Text style={[styles.actionText, { color: colors.danger600 }]}>
+                                {cancelling ? "Annulation…" : "Annuler"}
+                            </Text>
+                        </Pressable>
+                    )}
                 </View>
-
-                {(canCancel || canShowQr) && (
-                    <View style={styles.actions}>
-                        {canShowQr && (
-                            <Pressable
-                                onPress={(e) => {
-                                    e.stopPropagation();
-                                    onShowQr();
-                                }}
-                                style={[
-                                    styles.action,
-                                    { backgroundColor: colors.brand100 },
-                                ]}
-                            >
-                                <Text
-                                    style={[styles.actionText, { color: colors.brand800 }]}
-                                >
-                                    QR
-                                </Text>
-                            </Pressable>
-                        )}
-                        {canCancel && (
-                            <Pressable
-                                onPress={(e) => {
-                                    e.stopPropagation();
-                                    onCancel();
-                                }}
-                                disabled={cancelling}
-                                style={[
-                                    styles.action,
-                                    {
-                                        backgroundColor: colors.danger100,
-                                        opacity: cancelling ? 0.6 : 1,
-                                    },
-                                ]}
-                            >
-                                <Text style={[styles.actionText, { color: colors.danger600 }]}>
-                                    {cancelling ? "Annulation…" : "Annuler"}
-                                </Text>
-                            </Pressable>
-                        )}
-                    </View>
-                )}
-            </Card>
+            )}
         </Pressable>
     );
 }
@@ -420,45 +343,43 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
 
     header: {
-        flexDirection: "row",
-        alignItems: "center",
+        paddingHorizontal: 20,
+        paddingTop: 10,
+        paddingBottom: 12,
         gap: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderBottomWidth: StyleSheet.hairlineWidth,
     },
-    headerSub: { marginTop: 2 },
-    iconChip: {
-        width: 34,
-        height: 34,
-        borderRadius: 99,
+    headerTop: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+    },
+    title: {
+        fontFamily: FontFamily.serifSemibold,
+        fontSize: 22,
+        letterSpacing: -0.2,
+    },
+    addBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         alignItems: "center",
         justifyContent: "center",
     },
 
-    tabsWrap: {
-        paddingVertical: 10,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-    },
-    tabsContent: {
-        paddingHorizontal: 16,
-        gap: 6,
-    },
-    tab: {
-        paddingHorizontal: 13,
-        paddingVertical: 7,
+    filtersRow: { gap: 7 },
+    filterChip: {
+        height: 34,
+        paddingHorizontal: 15,
         borderRadius: 99,
         borderWidth: StyleSheet.hairlineWidth,
+        alignItems: "center",
+        justifyContent: "center",
     },
-    tabText: {
+    filterText: {
         fontFamily: FontFamily.uiMedium,
-        fontSize: Typography.fontSize.xs,
+        fontSize: 12.5,
     },
 
-    searchWrap: {
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-    },
     search: {
         flexDirection: "row",
         alignItems: "center",
@@ -475,45 +396,48 @@ const styles = StyleSheet.create({
     },
 
     list: {
-        padding: 16,
+        paddingHorizontal: 20,
+        paddingTop: 6,
         paddingBottom: 120,
+        gap: 9,
     },
 
+    card: {
+        borderRadius: 18,
+        borderWidth: StyleSheet.hairlineWidth,
+        padding: 16,
+    },
     cardTop: {
         flexDirection: "row",
         justifyContent: "space-between",
-        alignItems: "flex-start",
-        marginBottom: 12,
-    },
-    code: {
-        fontFamily: FontFamily.monoRegular,
-        fontSize: Typography.fontSize.tiny,
-    },
-    date: {
-        fontFamily: FontFamily.uiSemibold,
-        fontSize: Typography.fontSize.sm,
-        marginTop: 3,
-    },
-    meta: {
-        fontFamily: FontFamily.uiRegular,
-        fontSize: Typography.fontSize.tiny,
-        marginTop: 3,
-    },
-    mono: { fontFamily: FontFamily.monoRegular },
-
-    timeline: {
-        flexDirection: "row",
         alignItems: "center",
-        gap: 4,
+        gap: 10,
     },
-    dot: {
-        width: 9,
-        height: 9,
-        borderRadius: 99,
+    cardId: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: 15,
     },
-    line: {
-        flex: 1,
-        height: 2,
+    cardDate: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: 12.5,
+        marginTop: 7,
+    },
+    cardBottom: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginTop: 13,
+        gap: 10,
+    },
+    cardKg: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: 13,
+    },
+    cardStep: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: 12.5,
+        flexShrink: 1,
+        textAlign: "right",
     },
 
     actions: {
@@ -534,5 +458,15 @@ const styles = StyleSheet.create({
     empty: {
         alignItems: "center",
         paddingVertical: 64,
+    },
+    emptyTitle: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.base,
+        marginTop: 12,
+    },
+    emptySub: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.xs,
+        marginTop: 4,
     },
 });

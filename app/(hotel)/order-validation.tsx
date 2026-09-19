@@ -183,14 +183,9 @@ export default function OrderValidationScreen() {
     return (
         <SafeAreaView
             edges={["top"]}
-            style={[styles.container, { backgroundColor: colors.paper2 }]}
+            style={[styles.container, { backgroundColor: colors.paper }]}
         >
-            <View
-                style={[
-                    styles.header,
-                    { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
-                ]}
-            >
+            <View style={styles.header}>
                 <Pressable onPress={() => router.back()} hitSlop={8}>
                     <Icon name="chevLeft" size={20} color={colors.ink800} />
                 </Pressable>
@@ -432,7 +427,6 @@ const styles = StyleSheet.create({
     header: {
         paddingHorizontal: 16,
         paddingVertical: 12,
-        borderBottomWidth: StyleSheet.hairlineWidth,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",

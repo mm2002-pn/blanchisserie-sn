@@ -362,14 +362,9 @@ export default function CollectScreen() {
         return (
             <SafeAreaView
                 edges={["top"]}
-                style={{ flex: 1, backgroundColor: colors.paper2 }}
+                style={{ flex: 1, backgroundColor: colors.paper }}
             >
-                <View
-                    style={[
-                        styles.listHeader,
-                        { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
-                    ]}
-                >
+                <View style={styles.listHeader}>
                     <View style={{ flex: 1 }}>
                         <Text style={[styles.listTitle, { color: colors.ink900 }]}>
                             Collectes
@@ -392,7 +387,7 @@ export default function CollectScreen() {
                     </View>
                 </View>
 
-                <View style={[styles.filterBar, { backgroundColor: colors.paper, borderBottomColor: colors.ink200 }]}>
+                <View style={styles.filterBar}>
                     <DayChip
                         label={`Aujourd'hui · ${collectsToday.length}`}
                         active={dayFilter === "today"}
@@ -495,7 +490,7 @@ export default function CollectScreen() {
                             setScanned(false);
                             setScannedId(null);
                         }}
-                        style={[styles.scanCta, { backgroundColor: colors.brand800 }]}
+                        style={[styles.scanCta, { backgroundColor: colors.terra600 }]}
                     >
                         <Icon name="qr" size={16} color={colors.paper} />
                         <Text style={[styles.scanCtaText, { color: colors.paper }]}>
@@ -513,18 +508,9 @@ export default function CollectScreen() {
      * On commente toute la partie caméra/scanner et on rend la sheet en
      * plein écran avec le formulaire de collecte directement. */
     return (
-        <View style={[styles.root, { backgroundColor: colors.paper2 }]}>
+        <View style={[styles.root, { backgroundColor: colors.paper }]}>
             {/* Top bar — bouton fermer + titre */}
-            <SafeAreaView
-                edges={["top"]}
-                style={[
-                    styles.topBarLight,
-                    {
-                        backgroundColor: colors.paper,
-                        borderBottomColor: colors.ink200,
-                    },
-                ]}
-            >
+            <SafeAreaView edges={["top"]} style={styles.topBarLight}>
                 <Pressable
                     onPress={handleClose}
                     style={[styles.topBtnLight, { backgroundColor: colors.ink100 }]}
@@ -584,7 +570,7 @@ export default function CollectScreen() {
                                     style={[
                                         styles.sheetAvatar,
                                         {
-                                            backgroundColor: colors.brand800,
+                                            backgroundColor: colors.terra600,
                                         },
                                     ]}
                                 >
@@ -889,7 +875,7 @@ export default function CollectScreen() {
                             onPress={handleValidate}
                             style={[
                                 styles.validateBtn,
-                                { backgroundColor: colors.brand800 },
+                                { backgroundColor: colors.brand900 },
                             ]}
                         >
                             <Icon name="check" size={15} color={colors.paper} />
@@ -957,7 +943,7 @@ export default function CollectScreen() {
                                     onPress={handleManualSubmit}
                                     style={[
                                         styles.manualSubmit,
-                                        { backgroundColor: colors.brand800 },
+                                        { backgroundColor: colors.terra600 },
                                     ]}
                                 >
                                     <Text style={[styles.validateText, { color: colors.paper }]}>
@@ -1040,7 +1026,6 @@ const styles = StyleSheet.create({
         gap: 8,
         paddingHorizontal: 12,
         paddingVertical: 12,
-        borderBottomWidth: StyleSheet.hairlineWidth,
     },
     topBtnLight: {
         width: 36,
@@ -1073,7 +1058,6 @@ const styles = StyleSheet.create({
     listHeader: {
         paddingHorizontal: 16,
         paddingVertical: 12,
-        borderBottomWidth: StyleSheet.hairlineWidth,
         flexDirection: "row",
         alignItems: "center",
     },
@@ -1103,7 +1087,6 @@ const styles = StyleSheet.create({
         gap: 8,
         paddingHorizontal: 16,
         paddingVertical: 10,
-        borderBottomWidth: StyleSheet.hairlineWidth,
     },
     dayChip: {
         paddingHorizontal: 12,
@@ -1248,7 +1231,7 @@ const styles = StyleSheet.create({
         opacity: 0.9,
     },
     detectedFlash: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         borderWidth: 3,
         borderRadius: 8,
         margin: 6,

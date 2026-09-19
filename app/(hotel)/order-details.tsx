@@ -13,6 +13,8 @@ import Svg, { Circle, Line, Rect } from "react-native-svg";
 
 import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
+import { MarineHeader } from "@/components/shared/MarineHeader";
+import { StatusBarSpace } from "@/components/shared/StatusBarSpace";
 import StatusBadge, { OrderStatus as UIStatus } from "@/components/ui/StatusBadge";
 import ThemedText from "@/components/ui/ThemedText";
 import { FontFamily, Typography } from "@/constants/Typography";
@@ -121,7 +123,7 @@ export default function OrderDetailsScreen() {
         return (
             <SafeAreaView
                 edges={["top"]}
-                style={[styles.container, { backgroundColor: colors.paper2 }]}
+                style={[styles.container, { backgroundColor: colors.paper }]}
             >
                 <View style={styles.emptyState}>
                     <Icon name="package" size={48} color={colors.ink300} stroke={1.2} />
@@ -188,81 +190,47 @@ export default function OrderDetailsScreen() {
         router.push({ pathname: "/(hotel)/new-order", params: { orderId: order.id } });
 
     return (
-        <SafeAreaView
-            edges={["top"]}
-            style={[styles.container, { backgroundColor: colors.paper2 }]}
-        >
-            {/* Top bar */}
-            <View
-                style={[
-                    styles.topBar,
-                    { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
-                ]}
-            >
-                <Pressable
-                    onPress={() => router.back()}
-                    style={[styles.iconChip, { backgroundColor: colors.ink100 }]}
-                    hitSlop={6}
-                >
-                    <Icon name="chevLeft" size={16} color={colors.ink800} stroke={2} />
-                </Pressable>
-                <View style={{ flex: 1 }}>
-                    <ThemedText variate="title">{order.orderNumber}</ThemedText>
-                    <ThemedText variate="caption" color="ink500" style={{ marginTop: 2 }}>
-                        Créée le {formatDateTime(order.createdAt)}
-                    </ThemedText>
-                </View>
-                <Pressable
-                    style={[styles.iconChip, { backgroundColor: colors.ink100 }]}
-                    hitSlop={6}
-                >
-                    <Icon name="msg" size={16} color={colors.ink700} />
-                </Pressable>
-            </View>
-
-            <ScrollView
-                contentContainerStyle={styles.content}
-                showsVerticalScrollIndicator={false}
-            >
-                {/* Status banner */}
-                <Card
-                    padding={14}
-                    style={[
-                        styles.statusBanner,
-                        {
-                            backgroundColor: colors.brand50,
-                            borderColor: colors.brand100,
-                        },
-                    ]}
-                >
-                    <View style={styles.statusBannerRow}>
-                        <View style={{ flex: 1 }}>
-                            <Text style={[styles.caps, { color: colors.brand700 }]}>
-                                Étape actuelle
+        <View style={[styles.container, { backgroundColor: colors.paper }]}>
+            <StatusBarSpace color={colors.brand900} />
+            <ScrollView showsVerticalScrollIndicator={false}>
+                {/* Header marine — id, date de création, badge de statut.
+                    Défile avec le contenu (pas sticky), comme dans la maquette. */}
+                <MarineHeader style={styles.heroHeader}>
+                    <View style={styles.heroRow}>
+                        <Pressable
+                            onPress={() => router.back()}
+                            style={[
+                                styles.heroIconChip,
+                                { backgroundColor: colors.brand800, borderColor: colors.brand600 },
+                            ]}
+                            hitSlop={6}
+                        >
+                            <Icon name="chevLeft" size={16} color="#FFFFFF" stroke={1.8} />
+                        </Pressable>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={styles.heroTitle} numberOfLines={1}>
+                                {order.orderNumber}
                             </Text>
-                            <Text
-                                style={[styles.statusTitle, { color: colors.ink900 }]}
-                            >
-                                {STATUS_TO_UI[order.status]}
+                            <Text style={[styles.heroDate, { color: colors.ink400 }]}>
+                                {formatDateTime(order.createdAt)}
                             </Text>
-                            {order.deliveryDate && (
-                                <Text
-                                    style={[styles.statusSub, { color: colors.ink600 }]}
-                                >
-                                    Livraison estimée · {formatDateTime(order.deliveryDate)}
-                                </Text>
-                            )}
                         </View>
                         <StatusBadge status={STATUS_TO_UI[order.status]} />
                     </View>
-                </Card>
+                </MarineHeader>
 
+                <View style={styles.content}>
                 {/* Progression */}
-                <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
-                    Progression
-                </ThemedText>
-                <Card padding={16} style={{ marginBottom: 14 }}>
-                    <View style={styles.timelineWrap}>
+                <Card padding={18} style={{ marginBottom: 14 }}>
+                    <Text style={[styles.cardTitle, { color: colors.ink900 }]}>
+                        Suivi de production
+                    </Text>
+                    {order.deliveryDate && order.status !== "delivered" && (
+                        <Text style={[styles.cardSubtitle, { color: colors.ink500 }]}>
+                            Livraison estimée · {formatDateTime(order.deliveryDate)}
+                        </Text>
+                    )}
+                    <View style={[styles.timelineWrap, { marginTop: 14 }]}>
                         {TIMELINE.map((step, i) => {
                             const done = order.status !== "cancelled" && i < currentIndex;
                             const active = order.status !== "cancelled" && i === currentIndex;
@@ -340,10 +308,10 @@ export default function OrderDetailsScreen() {
                 </Card>
 
                 {/* Documents commerciaux */}
-                <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
-                    Documents
-                </ThemedText>
-                <Card padding={12} style={{ marginBottom: 14 }}>
+                <Card padding={16} style={{ marginBottom: 14 }}>
+                    <Text style={[styles.cardTitle, { color: colors.ink900, marginBottom: 12 }]}>
+                        Documents
+                    </Text>
                     <View style={styles.docsRow}>
                         <DocumentButton
                             orderId={order.id}
@@ -374,10 +342,10 @@ export default function OrderDetailsScreen() {
                 </Card>
 
                 {/* Weight comparator */}
-                <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
-                    Poids estimé vs réel
-                </ThemedText>
-                <Card padding={16} style={{ marginBottom: 14 }}>
+                <Card padding={18} style={{ marginBottom: 14 }}>
+                    <Text style={[styles.cardTitle, { color: colors.ink900, marginBottom: 14 }]}>
+                        Poids estimé vs réel
+                    </Text>
                     <View style={styles.weightHead}>
                         <View>
                             <Text style={[styles.weightCaption, { color: colors.ink500 }]}>
@@ -493,10 +461,15 @@ export default function OrderDetailsScreen() {
                 </Card>
 
                 {/* Articles */}
-                <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
-                    Articles · {totalPieces} pièces
-                </ThemedText>
                 <Card padding={0} style={{ marginBottom: 14 }}>
+                    <Text
+                        style={[
+                            styles.cardTitle,
+                            { color: colors.ink900, padding: 16, paddingBottom: 4 },
+                        ]}
+                    >
+                        Contenu · {totalPieces} pièces
+                    </Text>
                     {items.length === 0 ? (
                         <Text
                             style={{
@@ -668,8 +641,9 @@ export default function OrderDetailsScreen() {
                         )}
                     </View>
                 )}
+                </View>
             </ScrollView>
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -739,20 +713,33 @@ function DocumentButton({
 const styles = StyleSheet.create({
     container: { flex: 1 },
 
-    topBar: {
+    heroHeader: {
+        paddingHorizontal: 20,
+        paddingTop: 8,
+        paddingBottom: 26,
+    },
+    heroRow: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderBottomWidth: StyleSheet.hairlineWidth,
+        gap: 14,
     },
-    iconChip: {
-        width: 34,
-        height: 34,
-        borderRadius: 99,
+    heroIconChip: {
+        width: 38,
+        height: 38,
+        borderRadius: 12,
+        borderWidth: StyleSheet.hairlineWidth,
         alignItems: "center",
         justifyContent: "center",
+    },
+    heroTitle: {
+        fontFamily: FontFamily.serifSemibold,
+        fontSize: 18,
+        color: "#FFFFFF",
+    },
+    heroDate: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.tiny,
+        marginTop: 1,
     },
 
     content: {
@@ -760,37 +747,20 @@ const styles = StyleSheet.create({
         paddingBottom: 120,
     },
 
-    // Status banner
-    statusBanner: {
-        marginBottom: 14,
-    },
-    statusBannerRow: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        gap: 10,
-    },
     caps: {
         fontFamily: FontFamily.uiSemibold,
         fontSize: Typography.fontSize.micro,
         letterSpacing: Typography.letterSpacing.wide,
         textTransform: "uppercase",
     },
-    statusTitle: {
-        fontFamily: FontFamily.serifMedium,
-        fontSize: 22,
-        marginTop: 2,
-        letterSpacing: -0.3,
+    cardTitle: {
+        fontFamily: FontFamily.serifSemibold,
+        fontSize: Typography.fontSize.base,
     },
-    statusSub: {
+    cardSubtitle: {
         fontFamily: FontFamily.uiRegular,
         fontSize: Typography.fontSize.tiny,
         marginTop: 4,
-    },
-
-    sectionLabel: {
-        marginBottom: 10,
-        paddingLeft: 2,
     },
 
     docsRow: {

@@ -9,8 +9,8 @@ import {
     View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 
-import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
 import StatusBadge, { OrderStatus as UIStatus } from "@/components/ui/StatusBadge";
 import ThemedText from "@/components/ui/ThemedText";
@@ -67,6 +67,7 @@ function resolveStatus(inv: Invoice): InvoiceStatus {
 }
 
 export default function InvoicesScreen() {
+    const router = useRouter();
     const colors = useThemeColors();
     const { user } = useAuth();
     const [selected, setSelected] = useState<FilterId>("all");
@@ -84,6 +85,47 @@ export default function InvoicesScreen() {
     );
     const pendingCount = hotelInvoices.filter((i) => i.status === "pending").length;
     const overdueCount = hotelInvoices.filter((i) => resolveStatus(i) === "overdue").length;
+
+    /** Ancienneté (jours) de la facture en retard la plus ancienne — vraie donnée. */
+    const maxOverdueDays = useMemo(() => {
+        const overdue = hotelInvoices.filter((i) => resolveStatus(i) === "overdue");
+        if (overdue.length === 0) return 0;
+        const now = Date.now();
+        return Math.max(
+            ...overdue.map((i) =>
+                Math.floor((now - new Date(i.dueDate).getTime()) / 86_400_000),
+            ),
+        );
+    }, [hotelInvoices]);
+
+    /** Total réglé sur l'année en cours — vraie donnée. */
+    const paidThisYear = useMemo(() => {
+        const year = new Date().getFullYear();
+        return hotelInvoices
+            .filter(
+                (i) =>
+                    i.status === "paid" &&
+                    new Date(i.paidDate ?? i.createdAt).getFullYear() === year,
+            )
+            .reduce((sum, i) => sum + i.total, 0);
+    }, [hotelInvoices]);
+
+    const summaryLine = useMemo(() => {
+        const parts: string[] = [];
+        if (overdueCount > 0) {
+            parts.push(
+                `${overdueCount} facture${overdueCount > 1 ? "s" : ""} échue${overdueCount > 1 ? "s" : ""} depuis ${maxOverdueDays} jour${maxOverdueDays > 1 ? "s" : ""}`,
+            );
+        } else if (pendingCount > 0) {
+            parts.push(`${pendingCount} facture${pendingCount > 1 ? "s" : ""} en attente`);
+        } else {
+            parts.push("Aucune facture en attente");
+        }
+        if (paidThisYear > 0) {
+            parts.push(`${formatCFA(paidThisYear)} F réglés en ${new Date().getFullYear()}`);
+        }
+        return parts.join(" · ");
+    }, [overdueCount, pendingCount, maxOverdueDays, paidThisYear]);
 
     const filtered = useMemo(() => {
         if (selected === "all") return hotelInvoices;
@@ -105,14 +147,9 @@ export default function InvoicesScreen() {
     return (
         <SafeAreaView
             edges={["top"]}
-            style={[styles.container, { backgroundColor: colors.paper2 }]}
+            style={[styles.container, { backgroundColor: colors.paper }]}
         >
-            <View
-                style={[
-                    styles.header,
-                    { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
-                ]}
-            >
+            <View style={styles.header}>
                 <ThemedText variate="title">Factures</ThemedText>
                 <ThemedText variate="caption" color="ink500" style={styles.headerSub}>
                     {user?.name ?? "Votre espace pro"}
@@ -125,80 +162,34 @@ export default function InvoicesScreen() {
                 contentContainerStyle={styles.list}
                 ListHeaderComponent={
                     <>
-                        {/* Outstanding summary */}
-                        {outstanding > 0 ? (
-                            <Card
-                                padding={16}
-                                style={[
-                                    styles.outstanding,
-                                    {
-                                        backgroundColor: colors.terra100,
-                                        borderColor: colors.terra600,
-                                    },
-                                ]}
-                            >
-                                <View style={styles.outstandingTop}>
-                                    <View style={{ flex: 1 }}>
-                                        <Text
-                                            style={[
-                                                styles.capsLabel,
-                                                { color: colors.terra700 },
-                                            ]}
-                                        >
-                                            À régler
-                                        </Text>
-                                        <View style={styles.amountRow}>
-                                            <Text
-                                                style={[styles.amount, { color: colors.ink900 }]}
-                                            >
-                                                {formatCFA(outstanding)}
-                                            </Text>
-                                            <Text
-                                                style={[
-                                                    styles.amountUnit,
-                                                    { color: colors.ink500 },
-                                                ]}
-                                            >
-                                                F
-                                            </Text>
-                                        </View>
-                                        <Text
-                                            style={[styles.summaryLine, { color: colors.ink600 }]}
-                                        >
-                                            {pendingCount} facture{pendingCount > 1 ? "s" : ""}{" "}
-                                            en attente
-                                            {overdueCount > 0
-                                                ? ` · ${overdueCount} en retard`
-                                                : ""}
-                                        </Text>
-                                    </View>
-                                    <View
-                                        style={[
-                                            styles.outstandingIcon,
-                                            { backgroundColor: colors.terra600 },
-                                        ]}
-                                    >
-                                        <Icon
-                                            name="alert"
-                                            size={20}
-                                            color={colors.paper}
-                                            stroke={2}
-                                        />
-                                    </View>
-                                </View>
+                        {/* Reste à régler — carte marine, comme la maquette */}
+                        <View style={[styles.outstanding, { backgroundColor: colors.brand900 }]}>
+                            <Text style={[styles.capsLabel, { color: colors.warn600 }]}>
+                                Reste à régler
+                            </Text>
+                            <View style={styles.amountRow}>
+                                <Text style={styles.amount}>{formatCFA(outstanding)}</Text>
+                                <Text style={[styles.amountUnit, { color: colors.ink400 }]}>
+                                    FCFA
+                                </Text>
+                            </View>
+                            <Text style={[styles.summaryLine, { color: colors.ink400 }]}>
+                                {summaryLine}
+                            </Text>
+                            {outstanding > 0 && (
                                 <Pressable
                                     onPress={handlePay}
                                     style={[
                                         styles.payCTA,
-                                        { backgroundColor: colors.terra700 },
+                                        { backgroundColor: colors.brand800, borderColor: colors.brand600 },
                                     ]}
                                 >
-                                    <Text style={[styles.payCTAText, { color: colors.paper }]}>
+                                    <Text style={styles.payCTAText}>
                                         Payer · Orange Money / Wave
                                     </Text>
                                 </Pressable>
-                            </Card>
-                        ) : null}
+                            )}
+                        </View>
 
                         {/* Filters */}
                         <View style={styles.tabsWrap}>
@@ -252,7 +243,17 @@ export default function InvoicesScreen() {
                         </ThemedText>
                     </>
                 }
-                renderItem={({ item }) => <InvoiceRow invoice={item} />}
+                renderItem={({ item }) => (
+                    <InvoiceRow
+                        invoice={item}
+                        onPress={() =>
+                            router.push({
+                                pathname: "/(hotel)/invoice-detail",
+                                params: { id: item.id },
+                            })
+                        }
+                    />
+                )}
                 ListEmptyComponent={
                     <View style={styles.empty}>
                         <Icon name="receipt" size={48} color={colors.ink300} stroke={1.2} />
@@ -270,42 +271,40 @@ export default function InvoicesScreen() {
     );
 }
 
-function InvoiceRow({ invoice }: { invoice: Invoice }) {
+function InvoiceRow({
+    invoice,
+    onPress,
+}: {
+    invoice: Invoice;
+    onPress: () => void;
+}) {
     const colors = useThemeColors();
     const status = resolveStatus(invoice);
+    const detail =
+        status === "paid" && invoice.paymentMethod
+            ? `${capitalize(formatMonth(invoice.createdAt))} · ${PAYMENT_METHOD_LABELS[invoice.paymentMethod]}`
+            : `${capitalize(formatMonth(invoice.createdAt))} · échéance ${formatDueShort(invoice.dueDate)}`;
 
     return (
-        <Card padding={14} style={styles.row}>
-            <View style={[styles.rowIcon, { backgroundColor: colors.paper2 }]}>
-                <Icon name="receipt" size={18} color={colors.ink600} />
-            </View>
-            <View style={styles.rowBody}>
-                <View style={styles.rowHeader}>
-                    <Text style={[styles.rowCode, { color: colors.ink500 }]}>
-                        {invoice.invoiceNumber}
-                    </Text>
-                    <StatusBadge status={STATUS_TO_UI[status]} />
-                </View>
-                <Text style={[styles.rowPeriod, { color: colors.ink900 }]}>
-                    {capitalize(formatMonth(invoice.createdAt))}
+        <Pressable
+            onPress={onPress}
+            style={[styles.row, { backgroundColor: colors.paper, borderColor: colors.ink200 }]}
+        >
+            <View style={styles.rowHeader}>
+                <Text style={[styles.rowCode, { color: colors.ink900 }]}>
+                    {invoice.invoiceNumber}
                 </Text>
-                {status === "paid" && invoice.paymentMethod ? (
-                    <Text style={[styles.rowDue, { color: colors.ink500 }]}>
-                        Payée · {PAYMENT_METHOD_LABELS[invoice.paymentMethod]}
-                    </Text>
-                ) : (
-                    <Text style={[styles.rowDue, { color: colors.ink500 }]}>
-                        échéance {formatDueShort(invoice.dueDate)}
-                    </Text>
-                )}
+                <StatusBadge status={STATUS_TO_UI[status]} />
             </View>
-            <View style={styles.rowRight}>
+            <View style={styles.rowBottom}>
+                <Text style={[styles.rowPeriod, { color: colors.ink600 }]} numberOfLines={1}>
+                    {detail}
+                </Text>
                 <Text style={[styles.rowAmount, { color: colors.ink900 }]}>
-                    {formatCFA(invoice.total)}
+                    {formatCFA(invoice.total)} F
                 </Text>
-                <Text style={[styles.rowAmountUnit, { color: colors.ink500 }]}>F CFA TTC</Text>
             </View>
-        </Card>
+        </Pressable>
     );
 }
 
@@ -319,7 +318,6 @@ const styles = StyleSheet.create({
     header: {
         paddingHorizontal: 16,
         paddingVertical: 12,
-        borderBottomWidth: StyleSheet.hairlineWidth,
     },
     headerSub: { marginTop: 2 },
 
@@ -329,14 +327,11 @@ const styles = StyleSheet.create({
         gap: 8,
     },
 
-    // Outstanding card
+    // Outstanding card (marine, comme la maquette)
     outstanding: {
+        borderRadius: 22,
+        padding: 20,
         marginBottom: 14,
-    },
-    outstandingTop: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "flex-start",
     },
     capsLabel: {
         fontFamily: FontFamily.uiSemibold,
@@ -348,40 +343,36 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "baseline",
         gap: 6,
-        marginTop: 4,
+        marginTop: 8,
     },
     amount: {
-        fontFamily: FontFamily.serifMedium,
+        fontFamily: FontFamily.serifSemibold,
         fontSize: 32,
         lineHeight: 34,
         letterSpacing: -0.5,
+        color: "#FFFFFF",
     },
     amountUnit: {
-        fontFamily: FontFamily.serifMedium,
-        fontSize: 14,
+        fontFamily: FontFamily.uiRegular,
+        fontSize: 16,
     },
     summaryLine: {
         fontFamily: FontFamily.uiRegular,
         fontSize: Typography.fontSize.tiny,
-        marginTop: 4,
-    },
-    outstandingIcon: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
-        alignItems: "center",
-        justifyContent: "center",
+        marginTop: 8,
+        lineHeight: 17,
     },
     payCTA: {
-        marginTop: 12,
-        paddingVertical: 10,
-        paddingHorizontal: 14,
-        borderRadius: 10,
+        marginTop: 14,
+        paddingVertical: 13,
+        borderRadius: 12,
+        borderWidth: StyleSheet.hairlineWidth,
         alignItems: "center",
     },
     payCTAText: {
         fontFamily: FontFamily.uiSemibold,
         fontSize: Typography.fontSize.xs,
+        color: "#FFFFFF",
     },
 
     // Tabs
@@ -408,49 +399,35 @@ const styles = StyleSheet.create({
 
     // Row
     row: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
+        borderRadius: 18,
+        borderWidth: StyleSheet.hairlineWidth,
+        padding: 16,
     },
-    rowIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: 10,
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    rowBody: { flex: 1 },
     rowHeader: {
         flexDirection: "row",
+        justifyContent: "space-between",
         alignItems: "center",
-        gap: 8,
+        gap: 10,
     },
     rowCode: {
-        fontFamily: FontFamily.monoRegular,
-        fontSize: Typography.fontSize.tiny,
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.base,
+    },
+    rowBottom: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "baseline",
+        marginTop: 10,
+        gap: 10,
     },
     rowPeriod: {
-        fontFamily: FontFamily.uiMedium,
-        fontSize: Typography.fontSize.sm,
-        marginTop: 3,
-    },
-    rowDue: {
-        fontFamily: FontFamily.monoRegular,
+        fontFamily: FontFamily.uiRegular,
         fontSize: Typography.fontSize.tiny,
-        marginTop: 1,
-    },
-    rowRight: {
-        alignItems: "flex-end",
+        flexShrink: 1,
     },
     rowAmount: {
-        fontFamily: FontFamily.monoMedium,
-        fontSize: Typography.fontSize.lg,
-        lineHeight: Typography.fontSize.lg,
-    },
-    rowAmountUnit: {
-        fontFamily: FontFamily.uiRegular,
-        fontSize: Typography.fontSize.micro,
-        marginTop: 2,
+        fontFamily: FontFamily.serifSemibold,
+        fontSize: 17,
     },
 
     empty: {

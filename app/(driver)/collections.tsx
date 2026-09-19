@@ -82,19 +82,11 @@ export default function CollectionsScreen() {
     };
 
     return (
-        <View style={[styles.container, { backgroundColor: colors.paper2 }]}>
+        <View style={[styles.container, { backgroundColor: colors.paper }]}>
             {/* Bande status bar même couleur que le header → transition invisible */}
             <StatusBarSpace color={colors.paper} />
             {/* Header */}
-            <View
-                style={[
-                    styles.header,
-                    {
-                        backgroundColor: colors.paper,
-                        borderBottomColor: colors.ink200,
-                    },
-                ]}
-            >
+            <View style={styles.header}>
                 <View style={{ flex: 1 }}>
                     <ThemedText variate="title">Mes collectes</ThemedText>
                     <Text style={[styles.headerSub, { color: colors.ink500 }]}>
@@ -123,7 +115,7 @@ export default function CollectionsScreen() {
                         label={`En cours · ${stats.inProgress}`}
                         active={filter === "in_progress"}
                         onPress={() => setFilter("in_progress")}
-                        tone="baobab"
+                        tone="terra"
                     />
                 )}
                 <Chip
@@ -235,12 +227,12 @@ function RoundCard({
                 styles.round,
                 {
                     backgroundColor: inProgress
-                        ? colors.baobab100
+                        ? colors.terra100
                         : completed
                           ? colors.ok100
                           : colors.paper,
                     borderColor: inProgress
-                        ? colors.baobab600
+                        ? colors.terra600
                         : completed
                           ? colors.ok600
                           : colors.ink200,
@@ -285,7 +277,7 @@ function RoundCard({
                                 styles.roundStatusPill,
                                 {
                                     backgroundColor: inProgress
-                                        ? colors.baobab600
+                                        ? colors.terra600
                                         : completed
                                           ? colors.ok700
                                           : colors.brand100,
@@ -370,7 +362,7 @@ function RoundCard({
                             backgroundColor: completed
                                 ? colors.ok700
                                 : inProgress
-                                  ? colors.baobab600
+                                  ? colors.terra600
                                   : colors.brand800,
                             width: total > 0 ? `${(done / total) * 100}%` : "0%",
                         },
@@ -436,10 +428,10 @@ function Chip({
     label: string;
     active: boolean;
     onPress: () => void;
-    tone?: "baobab";
+    tone?: "terra";
 }) {
     const colors = useThemeColors();
-    const activeBg = tone === "baobab" ? colors.baobab600 : colors.ink900;
+    const activeBg = tone === "terra" ? colors.terra600 : colors.ink900;
     return (
         <Pressable
             onPress={onPress}
@@ -471,7 +463,6 @@ const styles = StyleSheet.create({
         gap: 12,
         paddingHorizontal: 16,
         paddingVertical: 12,
-        borderBottomWidth: StyleSheet.hairlineWidth,
     },
     headerSub: {
         fontFamily: FontFamily.uiRegular,
@@ -504,7 +495,7 @@ const styles = StyleSheet.create({
     /* Round card */
     round: {
         padding: 14,
-        borderRadius: 14,
+        borderRadius: 18,
         gap: 10,
     },
     roundHead: {

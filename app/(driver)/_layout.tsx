@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { StyleSheet } from "react-native";
+import { StyleSheet, type ColorValue } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon, { IconName } from "@/components/ui/Icon";
 import { FontFamily, Typography } from "@/constants/Typography";
@@ -15,7 +15,7 @@ export default function DriverLayout() {
         <Tabs
             screenOptions={{
                 headerShown: false,
-                tabBarActiveTintColor: colors.baobab600,
+                tabBarActiveTintColor: colors.ink900,
                 tabBarInactiveTintColor: colors.ink500,
                 tabBarStyle: {
                     backgroundColor: colors.paper,
@@ -36,9 +36,9 @@ export default function DriverLayout() {
             <Tabs.Screen
                 name="route"
                 options={{
-                    title: "Carte",
+                    title: "Accueil",
                     tabBarIcon: ({ color, focused }) => (
-                        <TabIcon name="map" color={color} focused={focused} />
+                        <TabIcon name="map" color={color as string} focused={focused} />
                     ),
                 }}
             />
@@ -47,16 +47,7 @@ export default function DriverLayout() {
                 options={{
                     title: "Tournée",
                     tabBarIcon: ({ color, focused }) => (
-                        <TabIcon name="route" color={color} focused={focused} />
-                    ),
-                }}
-            />
-            <Tabs.Screen
-                name="messages"
-                options={{
-                    title: "Messages",
-                    tabBarIcon: ({ color, focused }) => (
-                        <TabIcon name="msg" color={color} focused={focused} />
+                        <TabIcon name="route" color={color as string} focused={focused} />
                     ),
                 }}
             />
@@ -65,15 +56,16 @@ export default function DriverLayout() {
                 options={{
                     title: "Profil",
                     tabBarIcon: ({ color, focused }) => (
-                        <TabIcon name="user" color={color} focused={focused} />
+                        <TabIcon name="user" color={color as string} focused={focused} />
                     ),
                 }}
             />
 
             {/* Push-only (accessibles via lien direct mais hors tabbar) */}
+            <Tabs.Screen name="tour-detail" options={{ href: null, title: "Détail tournée" }} />
+            <Tabs.Screen name="messages" options={{ href: null, title: "Messages" }} />
             <Tabs.Screen name="delivery" options={{ href: null, title: "Livraison" }} />
             <Tabs.Screen name="navigation" options={{ href: null, title: "Navigation" }} />
-            <Tabs.Screen name="tour-detail" options={{ href: null, title: "Détail tournée" }} />
             <Tabs.Screen name="collect" options={{ href: null, title: "Scanner & collecter" }} />
             <Tabs.Screen name="deliver" options={{ href: null, title: "Livrer" }} />
         </Tabs>
@@ -86,8 +78,8 @@ function TabIcon({
     focused,
 }: {
     name: IconName;
-    color: string;
+    color: ColorValue;
     focused: boolean;
 }) {
-    return <Icon name={name} size={20} color={color} stroke={focused ? 2 : 1.6} />;
+    return <Icon name={name} size={20} color={color as string} stroke={focused ? 2 : 1.6} />;
 }

@@ -1,99 +1,99 @@
 /**
- * Blanchisserie SN — Design tokens
- * Palette : bleu boubou (brand) · terre de Casamance (terra) · vert baobab (baobab)
- * Neutres chauds (paper/ink) · sémantiques ok/warn/danger
+ * B&C Teranga — Design tokens
+ * Palette : marine (brand) · terracotta (terra) · vert (baobab, alias succès)
+ * Neutres (paper/ink) · sémantiques ok/warn/danger
  *
- * Valeurs converties depuis OKLCH (cf. `docs/design.md`) vers hex pour React Native.
+ * Alignée sur le design system du back-office (tailwind.config.js).
  */
 
 const lightPalette = {
-    // Paper — fonds chauds
-    paper: "#FCFBF9",
-    paper2: "#F6F4F0",
-    paper3: "#F1EEE9",
+    // Paper — fonds
+    paper: "#FFFFFF",
+    paper2: "#F1F3F7",
+    paper3: "#EDEFF3",
 
-    // Ink — texte, bordures
-    ink50: "#FDFCFB",
-    ink100: "#F2EFEB",
-    ink200: "#E4E0DA", // bordures 0.5px
-    ink300: "#CDC8BF",
-    ink400: "#A39E93",
-    ink500: "#807A6F", // captions
-    ink600: "#5E584F",
-    ink700: "#423D35",
-    ink800: "#2A2620",
-    ink900: "#1A1712", // titres
+    // Ink — texte, bordures (échelle marine/gris)
+    ink50: "#FAFBFC",
+    ink100: "#F1F3F7",
+    ink200: "#EDEFF3", // bordures
+    ink300: "#DDE2EA",
+    ink400: "#AFBDD1",
+    ink500: "#8B97A8", // captions
+    ink600: "#4A5768",
+    ink700: "#2E4066",
+    ink800: "#17356B",
+    ink900: "#0B1A2E", // titres
 
-    // Brand — bleu boubou (hue 244)
-    brand50: "#F1F3FA",
-    brand100: "#DDE2F0",
-    brand500: "#6A80CC",
-    brand600: "#4A62BC",
-    brand700: "#394E9A",
-    brand800: "#2C3C79",
-    brand900: "#1D2853",
+    // Brand — marine (identité principale)
+    brand50: "#EDF1F7",
+    brand100: "#D7E1F0",
+    brand500: "#2C5A9E",
+    brand600: "#1E3E70",
+    brand700: "#17356B",
+    brand800: "#0F2549",
+    brand900: "#0B1A2E",
 
-    // Terra — terre de Casamance (hue 38)
-    terra100: "#F5E4D7",
-    terra600: "#CF7B4B",
-    terra700: "#AA5B2A",
+    // Terra — terracotta (accent secondaire, CTA)
+    terra100: "#FCEBD9",
+    terra600: "#DE6B0E",
+    terra700: "#B3540A",
 
-    // Baobab — vert baobab (hue 135)
-    baobab100: "#E0EEDB",
-    baobab600: "#629853",
-    baobab700: "#4A7A3E",
+    // Baobab — alias succès (conservé pour compat)
+    baobab100: "#E4F3E9",
+    baobab600: "#2C7A4B",
+    baobab700: "#215C38",
 
     // Sémantiques
-    ok100: "#DCEEE1",
-    ok600: "#53A47C",
-    ok700: "#3A825E",
-    warn100: "#F6EAD0",
-    warn600: "#CA9A36",
-    warn700: "#92671D",
-    danger100: "#F6E0DA",
-    danger600: "#C3452B",
+    ok100: "#E4F3E9",
+    ok600: "#2C7A4B",
+    ok700: "#215C38",
+    warn100: "#FCEBD9",
+    warn600: "#F0A03D",
+    warn700: "#B3540A",
+    danger100: "#FBEAE5",
+    danger600: "#C1441F",
 };
 
 const darkPalette = {
-    paper: "#161719",
-    paper2: "#1D1E20",
-    paper3: "#242527",
+    paper: "#0B1220",
+    paper2: "#111A2C",
+    paper3: "#17233A",
 
-    ink50: "#151619",
-    ink100: "#1B1D1F",
-    ink200: "#2A2C2F",
-    ink300: "#3A3C3F",
-    ink400: "#555759",
-    ink500: "#6E7073",
-    ink600: "#8B8D8F",
-    ink700: "#A8AAAC",
-    ink800: "#C7C8CA",
-    ink900: "#F1F1F2",
+    ink50: "#0B1220",
+    ink100: "#111A2C",
+    ink200: "#233150",
+    ink300: "#334469",
+    ink400: "#5C6E93",
+    ink500: "#8B97A8",
+    ink600: "#AFBDD1",
+    ink700: "#C9D4E4",
+    ink800: "#E4EAF3",
+    ink900: "#F5F7FB",
 
-    brand50: "#1E2442",
-    brand100: "#2A3158",
-    brand500: "#8C9EE1",
-    brand600: "#A0B1E8",
-    brand700: "#B3C1EC",
-    brand800: "#C7D2F0",
-    brand900: "#DCE4F4",
+    brand50: "#0F1B33",
+    brand100: "#17284A",
+    brand500: "#5C88CC",
+    brand600: "#7DA3DE",
+    brand700: "#9EBCE8",
+    brand800: "#C1D3F0",
+    brand900: "#E4ECFA",
 
-    terra100: "#3A241A",
-    terra600: "#D4916A",
-    terra700: "#E0A583",
+    terra100: "#3A2410",
+    terra600: "#F0A03D",
+    terra700: "#F4B968",
 
-    baobab100: "#223324",
-    baobab600: "#7EB36F",
-    baobab700: "#94C28B",
+    baobab100: "#16301F",
+    baobab600: "#4FA871",
+    baobab700: "#79C296",
 
-    ok100: "#1F3829",
-    ok600: "#70B998",
-    ok700: "#8CCCAE",
-    warn100: "#3A2E14",
-    warn600: "#DCAF57",
-    warn700: "#E6C281",
-    danger100: "#3A1F17",
-    danger600: "#DB644C",
+    ok100: "#16301F",
+    ok600: "#4FA871",
+    ok700: "#79C296",
+    warn100: "#3A2410",
+    warn600: "#F0A03D",
+    warn700: "#F4B968",
+    danger100: "#3A1710",
+    danger600: "#E06A45",
 };
 
 /**
@@ -107,7 +107,7 @@ export const Colors = {
         // Aliases historiques — pointent vers la nouvelle palette
         primary: lightPalette.brand800,
         primaryDark: lightPalette.brand900,
-        secondary: lightPalette.baobab600,
+        secondary: lightPalette.terra600,
         background: lightPalette.paper2,
         surface: lightPalette.paper,
 
@@ -136,7 +136,7 @@ export const Colors = {
 
         primary: darkPalette.brand700,
         primaryDark: darkPalette.brand800,
-        secondary: darkPalette.baobab600,
+        secondary: darkPalette.terra600,
         background: darkPalette.paper,
         surface: darkPalette.paper2,
 

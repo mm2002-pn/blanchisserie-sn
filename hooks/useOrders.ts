@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   cancelOrder as cancelOrderApi,
   collectOrder as collectOrderApi,
@@ -34,6 +34,16 @@ export function useOrder(id: string | undefined) {
     queryKey: ordersKeys.detail(id ?? ''),
     queryFn: () => getOrder(id as string),
     enabled: Boolean(id),
+  });
+}
+
+/** Récupère plusieurs commandes en parallèle (ex: commandes liées à une facture). */
+export function useOrdersByIds(ids: string[]) {
+  return useQueries({
+    queries: ids.map((id) => ({
+      queryKey: ordersKeys.detail(id),
+      queryFn: () => getOrder(id),
+    })),
   });
 }
 

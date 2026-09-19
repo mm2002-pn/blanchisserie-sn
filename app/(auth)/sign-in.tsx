@@ -7,15 +7,12 @@ import {
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import Svg, { Defs, Path, Pattern, Rect } from "react-native-svg";
 
-import Button from "@/components/ui/Button";
-import Icon from "@/components/ui/Icon";
-import Input from "@/components/ui/Input";
-import ThemedText from "@/components/ui/ThemedText";
+import { BrandMark } from "@/components/ui/BrandMark";
 import { FontFamily, Typography } from "@/constants/Typography";
 import { useAuth } from "@/contexts/AuthContext";
 import { useThemeColors } from "@/hooks/useThemeColors";
@@ -27,37 +24,15 @@ export default function SignInScreen() {
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [remember, setRemember] = useState(true);
     const [loading, setLoading] = useState(false);
-    const [errors, setErrors] = useState({ email: "", password: "" });
-
-    const validate = () => {
-        let valid = true;
-        const newErrors = { email: "", password: "" };
-
-        if (!email) {
-            newErrors.email = "Email requis";
-            valid = false;
-        } else if (!/\S+@\S+\.\S+/.test(email)) {
-            newErrors.email = "Email invalide";
-            valid = false;
-        }
-
-        if (!password) {
-            newErrors.password = "Mot de passe requis";
-            valid = false;
-        } else if (password.length < 6) {
-            newErrors.password = "Minimum 6 caractères";
-            valid = false;
-        }
-
-        setErrors(newErrors);
-        return valid;
-    };
+    const [error, setError] = useState("");
 
     const handleSignIn = async () => {
-        if (!validate()) return;
-
+        if (!email || !password) {
+            setError("Renseigne ton email et ton mot de passe.");
+            return;
+        }
+        setError("");
         setLoading(true);
         try {
             const user = await login(email, password);
@@ -73,256 +48,225 @@ export default function SignInScreen() {
             }
         } catch (err: unknown) {
             const message =
-                err instanceof Error
-                    ? err.message
-                    : "Email ou mot de passe incorrect";
-            Alert.alert("Erreur de connexion", message);
+                err instanceof Error ? err.message : "Identifiants incorrects.";
+            setError(message);
         } finally {
             setLoading(false);
         }
     };
 
     return (
+        // Fond marine fixe, plein écran, INDÉPENDANT du KeyboardAvoidingView —
+        // "height" (Android) réduit la vraie hauteur du composant quand le
+        // clavier s'ouvre ; sans ce fond derrière, la zone libérée en bas
+        // laisse voir le blanc de la fenêtre native.
+        <View style={[styles.container, { backgroundColor: colors.brand900 }]}>
         <KeyboardAvoidingView
-            style={[styles.container, { backgroundColor: colors.brand800 }]}
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={styles.container}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
             <ScrollView
                 contentContainerStyle={styles.scroll}
                 keyboardShouldPersistTaps="handled"
+                automaticallyAdjustKeyboardInsets
                 bounces={false}
             >
-                {/* Bannière haute — motif onde en filigrane + logo */}
-                <View style={[styles.banner, { backgroundColor: colors.brand800 }]}>
-                    <Svg
-                        style={StyleSheet.absoluteFillObject}
-                        width="100%"
-                        height="100%"
-                        viewBox="0 0 390 280"
-                        preserveAspectRatio="xMidYMid slice"
-                        opacity={0.12}
-                    >
-                        <Defs>
-                            <Pattern
-                                id="wave"
-                                width="80"
-                                height="40"
-                                patternUnits="userSpaceOnUse"
-                            >
-                                <Path
-                                    d="M0 20 Q20 0 40 20 T80 20"
-                                    stroke="white"
-                                    strokeWidth="1"
-                                    fill="none"
-                                />
-                            </Pattern>
-                        </Defs>
-                        <Rect width="100%" height="100%" fill="url(#wave)" />
-                    </Svg>
-
-                    <View style={styles.logoWrap}>
-                        <View
-                            style={[styles.logoBox, { backgroundColor: colors.terra600 }]}
-                        >
-                            <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
-                                <Path
-                                    d="M3 5h18v14H3zM7 5v14M17 5v14M3 10h18M3 14h18"
-                                    stroke="white"
-                                    strokeWidth={1.8}
-                                    strokeLinecap="round"
-                                />
-                            </Svg>
+                <View style={styles.hero}>
+                    <View style={styles.brandRow}>
+                        <BrandMark size={46} variant="full" />
+                        <View style={[styles.brandDivider, { backgroundColor: colors.brand600 }]} />
+                        <View>
+                            <Text style={styles.brandName}>B&C</Text>
+                            <Text style={styles.brandSuffix}>TERANGA</Text>
                         </View>
-                        <Text style={[styles.logoText, { color: colors.paper }]}>
-                            Blanchisserie SN
-                        </Text>
                     </View>
+                    <Text style={styles.title}>
+                        L'Art du Blanc{"\n"}
+                        <Text style={styles.titleAccent}>et de la Couleur.</Text>
+                    </Text>
+                    <Text style={[styles.subtitle, { color: colors.ink400 }]}>
+                        Connecte-toi pour accéder à ton espace.
+                    </Text>
                 </View>
 
-                {/* Feuille basse — form */}
-                <View style={[styles.sheet, { backgroundColor: colors.paper }]}>
-                    <ThemedText variate="titleLg" style={styles.welcome}>
-                        Bon retour.
-                    </ThemedText>
-                    <ThemedText
-                        variate="caption"
-                        color="ink500"
-                        style={styles.welcomeSub}
-                    >
-                        Connectez-vous à votre espace pro.
-                    </ThemedText>
-
-                    <Input
-                        label="Email professionnel"
-                        placeholder="hotel@blanchisserie.sn"
+                <View style={styles.form}>
+                    <TextInput
                         value={email}
                         onChangeText={setEmail}
-                        error={errors.email}
+                        placeholder="Adresse e-mail"
+                        placeholderTextColor={colors.ink500}
                         keyboardType="email-address"
                         autoCapitalize="none"
                         autoComplete="email"
+                        style={[
+                            styles.input,
+                            { backgroundColor: colors.brand800, borderColor: colors.brand700, color: "#FFFFFF" },
+                        ]}
                     />
-
-                    <Input
-                        label="Mot de passe"
-                        placeholder="••••••••••"
+                    <TextInput
                         value={password}
                         onChangeText={setPassword}
-                        error={errors.password}
+                        placeholder="Mot de passe"
+                        placeholderTextColor={colors.ink500}
                         secureTextEntry
                         autoCapitalize="none"
+                        style={[
+                            styles.input,
+                            { backgroundColor: colors.brand800, borderColor: colors.brand700, color: "#FFFFFF" },
+                        ]}
                     />
 
-                    <View style={styles.row}>
-                        <Pressable
-                            onPress={() => setRemember((v) => !v)}
-                            style={styles.checkboxRow}
-                            hitSlop={6}
-                        >
-                            <View
-                                style={[
-                                    styles.checkbox,
-                                    {
-                                        backgroundColor: remember
-                                            ? colors.brand800
-                                            : "transparent",
-                                        borderColor: remember
-                                            ? colors.brand800
-                                            : colors.ink300,
-                                    },
-                                ]}
-                            >
-                                {remember && (
-                                    <Icon
-                                        name="check"
-                                        size={10}
-                                        color={colors.paper}
-                                        stroke={3}
-                                    />
-                                )}
+                    {error && (
+                        <View style={[styles.errorBox, { backgroundColor: "#3A1108", borderColor: "#8A3016" }]}>
+                            <View style={[styles.errorDot, { backgroundColor: colors.terra600 }]}>
+                                <Text style={styles.errorDotText}>!</Text>
                             </View>
-                            <Text style={[styles.checkLabel, { color: colors.ink700 }]}>
-                                Se souvenir de moi
-                            </Text>
-                        </Pressable>
+                            <Text style={styles.errorText}>{error}</Text>
+                        </View>
+                    )}
 
-                        <Pressable hitSlop={6}>
-                            <Text style={[styles.forgot, { color: colors.brand700 }]}>
-                                Mot de passe oublié ?
-                            </Text>
-                        </Pressable>
-                    </View>
-
-                    <Button
-                        title="Se connecter"
+                    <Pressable
                         onPress={handleSignIn}
-                        loading={loading}
-                        fullWidth
-                        size="large"
-                        style={styles.submit}
-                    />
-
-                    <View style={styles.signupRow}>
-                        <Text style={[styles.signupText, { color: colors.ink500 }]}>
-                            Pas encore de compte ?{" "}
+                        disabled={loading}
+                        style={[
+                            styles.submit,
+                            { backgroundColor: colors.terra600, opacity: loading ? 0.7 : 1 },
+                        ]}
+                    >
+                        <Text style={styles.submitText}>
+                            {loading ? "Connexion…" : "Se connecter"}
                         </Text>
-                        <Pressable hitSlop={6}>
-                            <Text style={[styles.signupLink, { color: colors.terra700 }]}>
-                                Demander l'accès
-                            </Text>
-                        </Pressable>
-                    </View>
+                    </Pressable>
 
+                    <Pressable hitSlop={6} style={styles.forgotWrap}>
+                        <Text style={[styles.forgot, { color: colors.ink400 }]}>
+                            Mot de passe oublié ?
+                        </Text>
+                    </Pressable>
                 </View>
             </ScrollView>
         </KeyboardAvoidingView>
+        </View>
     );
 }
 
-const BANNER_HEIGHT = 260;
-
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    scroll: { flexGrow: 1 },
-    banner: {
-        height: BANNER_HEIGHT,
-        overflow: "hidden",
-    },
-    logoWrap: {
-        ...StyleSheet.absoluteFillObject,
-        alignItems: "center",
-        justifyContent: "center",
-        paddingTop: 40,
-    },
-    logoBox: {
-        width: 56,
-        height: 56,
-        borderRadius: 14,
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    logoText: {
-        fontFamily: FontFamily.serifMedium,
-        fontSize: 26,
-        letterSpacing: -0.3,
-        marginTop: 14,
-    },
-    sheet: {
-        marginTop: -24,
-        padding: 24,
-        paddingTop: 28,
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        flex: 1,
-    },
-    welcome: {
-        marginBottom: 6,
-    },
-    welcomeSub: {
-        marginBottom: 22,
-    },
-    row: {
-        flexDirection: "row",
+    // `flexGrow:1` + `justifyContent:'space-between'` : hero en haut, formulaire
+    // en bas SUR GRAND écran/clavier fermé, mais les deux redeviennent
+    // simplement empilés (pas de centrage concurrent) dès que l'espace se
+    // réduit (clavier ouvert) — le ScrollView prend le relais sans jamais
+    // masquer le bouton.
+    scroll: {
+        flexGrow: 1,
         justifyContent: "space-between",
-        alignItems: "center",
-        marginTop: 6,
-        marginBottom: 22,
+        paddingHorizontal: 30,
+        paddingTop: 70,
+        paddingBottom: 34,
     },
-    checkboxRow: {
+
+    hero: {
+        marginBottom: 40,
+    },
+    brandRow: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 8,
+        gap: 13,
     },
-    checkbox: {
+    brandDivider: {
+        width: 1,
+        height: 34,
+    },
+    brandName: {
+        fontFamily: FontFamily.uiBold,
+        fontSize: 19,
+        lineHeight: 19,
+        letterSpacing: -0.5,
+        color: "#FFFFFF",
+    },
+    brandSuffix: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: 9,
+        letterSpacing: 2.3,
+        color: "#F0A03D",
+        marginTop: 5,
+    },
+    title: {
+        fontFamily: FontFamily.serifSemibold,
+        fontSize: 32,
+        lineHeight: 36,
+        color: "#FFFFFF",
+        marginTop: 26,
+        letterSpacing: -0.5,
+    },
+    titleAccent: {
+        color: "#F0A03D",
+        fontFamily: FontFamily.serifRegular,
+        fontWeight: "300",
+    },
+    subtitle: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.md,
+        marginTop: 14,
+        lineHeight: 22,
+    },
+
+    form: {
+        gap: 11,
+    },
+    input: {
+        height: 60,
+        borderRadius: 16,
+        borderWidth: StyleSheet.hairlineWidth,
+        paddingHorizontal: 18,
+        fontSize: 15,
+        fontFamily: FontFamily.serifRegular,
+    },
+    errorBox: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        borderRadius: 14,
+        borderWidth: StyleSheet.hairlineWidth,
+        paddingHorizontal: 15,
+        paddingVertical: 13,
+    },
+    errorDot: {
         width: 18,
         height: 18,
-        borderRadius: 4,
-        borderWidth: 1.5,
+        borderRadius: 9,
         alignItems: "center",
         justifyContent: "center",
     },
-    checkLabel: {
-        fontFamily: FontFamily.uiMedium,
-        fontSize: Typography.fontSize.xs,
+    errorDotText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: 12,
+        color: "#3A1108",
     },
-    forgot: {
-        fontFamily: FontFamily.uiMedium,
-        fontSize: Typography.fontSize.xs,
+    errorText: {
+        flex: 1,
+        fontSize: 13,
+        color: "#F5CDBF",
+        fontFamily: FontFamily.uiRegular,
     },
     submit: {
-        borderRadius: 12,
-    },
-    signupRow: {
-        flexDirection: "row",
+        marginTop: 5,
+        height: 60,
+        borderRadius: 16,
+        alignItems: "center",
         justifyContent: "center",
-        marginTop: 20,
     },
-    signupText: {
+    submitText: {
+        fontFamily: FontFamily.serifSemibold,
+        fontSize: 15,
+        color: "#FFFFFF",
+    },
+    forgotWrap: {
+        paddingTop: 4,
+    },
+    forgot: {
+        textAlign: "center",
         fontFamily: FontFamily.uiRegular,
-        fontSize: Typography.fontSize.xs,
-    },
-    signupLink: {
-        fontFamily: FontFamily.uiSemibold,
-        fontSize: Typography.fontSize.xs,
+        fontSize: 13,
     },
 });

@@ -1,17 +1,26 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { listInvoices } from '@/services/invoices.service';
+import { getInvoice, listInvoices } from '@/services/invoices.service';
 import { useRealtime } from '@/services/realtime';
 
 export const invoicesKeys = {
   all: ['invoices'] as const,
   list: (clientId?: string) => [...invoicesKeys.all, 'list', clientId ?? null] as const,
+  detail: (id: string) => [...invoicesKeys.all, 'detail', id] as const,
 };
 
 export function useInvoices(clientId?: string) {
   return useQuery({
     queryKey: invoicesKeys.list(clientId),
     queryFn: () => listInvoices(clientId ? { clientId } : {}),
+  });
+}
+
+export function useInvoice(id: string | undefined) {
+  return useQuery({
+    queryKey: invoicesKeys.detail(id ?? ''),
+    queryFn: () => getInvoice(id as string),
+    enabled: Boolean(id),
   });
 }
 

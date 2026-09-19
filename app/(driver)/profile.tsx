@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-    Alert,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -12,24 +11,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Card from "@/components/ui/Card";
 import Icon, { IconName } from "@/components/ui/Icon";
 import ThemedText from "@/components/ui/ThemedText";
-import DrawerMenu from "@/components/shared/DrawerMenu";
 import { useAuth } from "@/contexts/AuthContext";
 import { FontFamily, Typography } from "@/constants/Typography";
 import { useThemeColors } from "@/hooks/useThemeColors";
 
-type DocStatus = "valid" | "expiring" | "expired";
-
-type Document = {
-    id: string;
-    name: string;
-    status: DocStatus;
-    expiry: string;
-};
-
 export default function DriverProfileScreen() {
     const { user } = useAuth();
     const colors = useThemeColors();
-    const [drawerVisible, setDrawerVisible] = useState(false);
 
     const driverStats = {
         deliveriesThisMonth: 127,
@@ -43,26 +31,7 @@ export default function DriverProfileScreen() {
         plate: "AB-1234-CD",
         capacity: "100 kg",
         fuelLevel: 75,
-        lastMaintenance: "15 déc. 2024",
-        nextMaintenance: "15 janv. 2025",
     };
-
-    const documents: Document[] = [
-        { id: "1", name: "Permis de conduire", status: "valid", expiry: "15 juin 2026" },
-        { id: "2", name: "Carte d'identité", status: "valid", expiry: "20 mars 2027" },
-        { id: "3", name: "Contrat de travail", status: "valid", expiry: "Indéterminé" },
-        { id: "4", name: "Assurance véhicule", status: "expiring", expiry: "10 janv. 2025" },
-    ];
-
-    const weekSchedule = [
-        { day: "L", date: "23", isToday: false, hasRoute: true },
-        { day: "M", date: "24", isToday: false, hasRoute: true },
-        { day: "M", date: "25", isToday: false, hasRoute: true },
-        { day: "J", date: "26", isToday: true, hasRoute: true },
-        { day: "V", date: "27", isToday: false, hasRoute: true },
-        { day: "S", date: "28", isToday: false, hasRoute: false },
-        { day: "D", date: "29", isToday: false, hasRoute: false },
-    ];
 
     const initials =
         (user?.name ?? "")
@@ -73,23 +42,12 @@ export default function DriverProfileScreen() {
             .join("")
             .toUpperCase() || "CH";
 
-    const handleViewDocument = (name: string) =>
-        Alert.alert("Document", `Visualisation de ${name}`);
-
     return (
         <SafeAreaView
             edges={["top"]}
-            style={[styles.container, { backgroundColor: colors.paper2 }]}
+            style={[styles.container, { backgroundColor: colors.paper }]}
         >
-            <View
-                style={[
-                    styles.header,
-                    { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
-                ]}
-            >
-                <Pressable onPress={() => setDrawerVisible(true)} hitSlop={8}>
-                    <Icon name="list" size={20} color={colors.ink800} />
-                </Pressable>
+            <View style={styles.header}>
                 <ThemedText variate="title">Profil</ThemedText>
                 <Pressable hitSlop={8}>
                     <Icon name="settings" size={18} color={colors.ink800} />
@@ -238,116 +196,8 @@ export default function DriverProfileScreen() {
                         </View>
                     </View>
 
-                    <View
-                        style={[
-                            styles.maintenanceRow,
-                            { borderTopColor: colors.ink200 },
-                        ]}
-                    >
-                        <Icon name="wrench" size={14} color={colors.ink500} />
-                        <View style={{ flex: 1 }}>
-                            <Text
-                                style={[styles.maintenanceText, { color: colors.ink700 }]}
-                            >
-                                Dernière révision : {assignedVehicle.lastMaintenance}
-                            </Text>
-                            <Text
-                                style={[styles.maintenanceText, { color: colors.ink700 }]}
-                            >
-                                Prochaine : {assignedVehicle.nextMaintenance}
-                            </Text>
-                        </View>
-                    </View>
                 </Card>
-
-                {/* Schedule */}
-                <ThemedText variate="caps" color="ink500" style={styles.groupLabel}>
-                    Planning de la semaine
-                </ThemedText>
-                <Card padding={14}>
-                    <View style={styles.weekGrid}>
-                        {weekSchedule.map((d, i) => (
-                            <View
-                                key={i}
-                                style={[
-                                    styles.dayCell,
-                                    d.isToday && {
-                                        backgroundColor: colors.brand800,
-                                        borderColor: colors.brand800,
-                                    },
-                                    !d.isToday && {
-                                        backgroundColor: colors.paper,
-                                        borderColor: colors.ink200,
-                                    },
-                                ]}
-                            >
-                                <Text
-                                    style={[
-                                        styles.dayLetter,
-                                        {
-                                            color: d.isToday ? colors.brand100 : colors.ink500,
-                                        },
-                                    ]}
-                                >
-                                    {d.day}
-                                </Text>
-                                <Text
-                                    style={[
-                                        styles.dayNumber,
-                                        {
-                                            color: d.isToday ? colors.paper : colors.ink900,
-                                        },
-                                    ]}
-                                >
-                                    {d.date}
-                                </Text>
-                                <View
-                                    style={[
-                                        styles.dayIndicator,
-                                        {
-                                            backgroundColor: d.hasRoute
-                                                ? d.isToday
-                                                    ? colors.paper
-                                                    : colors.baobab600
-                                                : "transparent",
-                                        },
-                                    ]}
-                                />
-                            </View>
-                        ))}
-                    </View>
-                </Card>
-
-                {/* Documents */}
-                <ThemedText variate="caps" color="ink500" style={styles.groupLabel}>
-                    Documents
-                </ThemedText>
-                <Card padding={0} style={{ overflow: "hidden" }}>
-                    {documents.map((doc, i) => (
-                        <DocumentRow
-                            key={doc.id}
-                            doc={doc}
-                            onPress={() => handleViewDocument(doc.name)}
-                            withDivider={i < documents.length - 1}
-                        />
-                    ))}
-                </Card>
-
-                {/* Quick actions */}
-                <ThemedText variate="caps" color="ink500" style={styles.groupLabel}>
-                    Raccourcis
-                </ThemedText>
-                <View style={{ gap: 10 }}>
-                    <ActionRow icon="chart" label="Mes statistiques" />
-                    <ActionRow icon="bell" label="Notifications" />
-                    <ActionRow icon="msg" label="Aide & support" />
-                </View>
             </ScrollView>
-
-            <DrawerMenu
-                visible={drawerVisible}
-                onClose={() => setDrawerVisible(false)}
-            />
         </SafeAreaView>
     );
 }
@@ -386,92 +236,11 @@ function StatTile({
     );
 }
 
-function DocumentRow({
-    doc,
-    onPress,
-    withDivider,
-}: {
-    doc: Document;
-    onPress: () => void;
-    withDivider: boolean;
-}) {
-    const colors = useThemeColors();
-
-    const [bg, fg]: [string, string] =
-        doc.status === "valid"
-            ? [colors.ok100, colors.ok700]
-            : doc.status === "expiring"
-              ? [colors.warn100, colors.warn700]
-              : [colors.danger100, colors.danger600];
-
-    const statusLabel =
-        doc.status === "valid"
-            ? "Valide"
-            : doc.status === "expiring"
-              ? "Expire bientôt"
-              : "Expiré";
-
-    return (
-        <Pressable
-            onPress={onPress}
-            style={[
-                styles.docRow,
-                withDivider && {
-                    borderBottomColor: colors.ink200,
-                    borderBottomWidth: StyleSheet.hairlineWidth,
-                },
-            ]}
-        >
-            <View
-                style={[styles.docIcon, { backgroundColor: colors.paper2 }]}
-            >
-                <Icon name="receipt" size={13} color={colors.ink600} />
-            </View>
-            <View style={{ flex: 1 }}>
-                <Text style={[styles.docName, { color: colors.ink900 }]}>
-                    {doc.name}
-                </Text>
-                <Text style={[styles.docExpiry, { color: colors.ink500 }]}>
-                    Expire : {doc.expiry}
-                </Text>
-            </View>
-            <View style={[styles.docBadge, { backgroundColor: bg }]}>
-                <Text style={[styles.docBadgeText, { color: fg }]}>
-                    {statusLabel}
-                </Text>
-            </View>
-        </Pressable>
-    );
-}
-
-function ActionRow({ icon, label }: { icon: IconName; label: string }) {
-    const colors = useThemeColors();
-    return (
-        <Pressable
-            style={[
-                styles.actionRow,
-                { backgroundColor: colors.paper, borderColor: colors.ink200 },
-            ]}
-        >
-            <View
-                style={[styles.actionIcon, { backgroundColor: colors.paper2 }]}
-            >
-                <Icon name={icon} size={14} color={colors.ink700} />
-            </View>
-            <Text style={[styles.actionLabel, { color: colors.ink900 }]}>
-                {label}
-            </Text>
-            <Icon name="chevRight" size={14} color={colors.ink400} />
-        </Pressable>
-    );
-}
-
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: {
         paddingHorizontal: 16,
         paddingVertical: 12,
-        borderBottomWidth: StyleSheet.hairlineWidth,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
@@ -529,7 +298,7 @@ const styles = StyleSheet.create({
         width: "47%",
         flexGrow: 1,
         borderWidth: StyleSheet.hairlineWidth,
-        borderRadius: 12,
+        borderRadius: 16,
         padding: 14,
     },
     statIcon: {
@@ -599,101 +368,4 @@ const styles = StyleSheet.create({
     },
     fuelBar: { height: 6, borderRadius: 3, overflow: "hidden" },
     fuelFill: { height: "100%", borderRadius: 3 },
-    maintenanceRow: {
-        marginTop: 12,
-        paddingTop: 12,
-        borderTopWidth: StyleSheet.hairlineWidth,
-        flexDirection: "row",
-        alignItems: "flex-start",
-        gap: 10,
-    },
-    maintenanceText: {
-        fontFamily: FontFamily.uiRegular,
-        fontSize: Typography.fontSize.tiny,
-        lineHeight: Typography.fontSize.tiny * 1.5,
-    },
-
-    // Week schedule
-    weekGrid: { flexDirection: "row", gap: 6 },
-    dayCell: {
-        flex: 1,
-        alignItems: "center",
-        paddingVertical: 10,
-        borderRadius: 10,
-        borderWidth: StyleSheet.hairlineWidth,
-    },
-    dayLetter: {
-        fontFamily: FontFamily.uiSemibold,
-        fontSize: Typography.fontSize.micro,
-        letterSpacing: 0.5,
-        textTransform: "uppercase",
-    },
-    dayNumber: {
-        fontFamily: FontFamily.serifMedium,
-        fontSize: 16,
-        marginTop: 2,
-    },
-    dayIndicator: {
-        width: 4,
-        height: 4,
-        borderRadius: 2,
-        marginTop: 5,
-    },
-
-    // Documents
-    docRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        paddingVertical: 12,
-        paddingHorizontal: 14,
-    },
-    docIcon: {
-        width: 32,
-        height: 32,
-        borderRadius: 8,
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    docName: {
-        fontFamily: FontFamily.uiMedium,
-        fontSize: Typography.fontSize.sm,
-    },
-    docExpiry: {
-        fontFamily: FontFamily.uiRegular,
-        fontSize: Typography.fontSize.tiny,
-        marginTop: 1,
-    },
-    docBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 999,
-    },
-    docBadgeText: {
-        fontFamily: FontFamily.uiSemibold,
-        fontSize: Typography.fontSize.micro,
-    },
-
-    // Action rows
-    actionRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        paddingVertical: 12,
-        paddingHorizontal: 14,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderRadius: 12,
-    },
-    actionIcon: {
-        width: 32,
-        height: 32,
-        borderRadius: 8,
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    actionLabel: {
-        flex: 1,
-        fontFamily: FontFamily.uiMedium,
-        fontSize: Typography.fontSize.sm,
-    },
 });

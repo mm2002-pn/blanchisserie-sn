@@ -8,15 +8,17 @@ import {
     Text,
     View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
 import Card from "@/components/ui/Card";
+import { MarineHeader } from "@/components/shared/MarineHeader";
+import { StatusBarSpace } from "@/components/shared/StatusBarSpace";
 import Icon, { IconName } from "@/components/ui/Icon";
 import ThemedText from "@/components/ui/ThemedText";
 import { FontFamily, Typography } from "@/constants/Typography";
 import { useAuth } from "@/contexts/AuthContext";
 import { useThemeColors } from "@/hooks/useThemeColors";
+import { useClient } from "@/hooks/useClient";
 
 type MenuItem = {
     icon: IconName;
@@ -30,10 +32,24 @@ type MenuGroup = {
     items: MenuItem[];
 };
 
+const CLIENT_TYPE_LABEL: Record<string, string> = {
+    hotel_5_etoiles: "Hôtel 5 étoiles",
+    hotel_4_etoiles: "Hôtel 4 étoiles",
+    hotel_3_etoiles: "Hôtel 3 étoiles",
+    restaurant: "Restaurant",
+    autre: "Établissement",
+};
+
+const BILLING_MODE_LABEL: Record<string, string> = {
+    per_order: "À la commande livrée",
+    monthly: "Facturation groupée mensuelle",
+};
+
 export default function HotelProfileScreen() {
     const router = useRouter();
     const { user, logout } = useAuth();
     const colors = useThemeColors();
+    const { data: client } = useClient(user?.clientId);
 
     const [pushEnabled, setPushEnabled] = useState(true);
     const [emailEnabled, setEmailEnabled] = useState(true);
@@ -51,48 +67,36 @@ export default function HotelProfileScreen() {
             },
         ]);
 
-    const initials = (user?.name ?? "")
+    const displayName = client?.name ?? user?.name ?? "Établissement";
+    const initials = displayName
         .split(" ")
         .map((w) => w.charAt(0))
         .filter(Boolean)
         .slice(0, 2)
         .join("")
-        .toUpperCase() || "PT";
+        .toUpperCase() || "ET";
+
+    const clientRef = client ? `Client ${client.id.slice(-6).toUpperCase()}` : "";
+    const typeLabel = client ? (CLIENT_TYPE_LABEL[client.type] ?? client.type) : "";
+
+    const profileRows: { k: string; v: string }[] = client
+        ? [
+              { k: "Raison sociale", v: client.name },
+              { k: "NINEA", v: client.ninea || "—" },
+              { k: "Adresse", v: [client.address, client.city].filter(Boolean).join(", ") || "—" },
+              { k: "Contact", v: client.contactPerson || "—" },
+              { k: "Tarif", v: client.tariff?.name || "Tarif standard" },
+              {
+                  k: "Facturation",
+                  v: client.billingMode ? (BILLING_MODE_LABEL[client.billingMode] ?? client.billingMode) : "—",
+              },
+          ]
+        : [];
 
     const groups: MenuGroup[] = [
         {
-            title: "Établissement",
-            items: [
-                { icon: "user", label: "Sous-comptes", sub: "4 utilisateurs" },
-                {
-                    icon: "receipt",
-                    label: "Informations facturation",
-                    sub: "NINEA · KYC à jour",
-                },
-                {
-                    icon: "calendar",
-                    label: "Planning contractuel",
-                    sub: "3 collectes / semaine",
-                    onPress: () => router.push("/(hotel)/planning"),
-                },
-            ],
-        },
-        {
-            title: "Support",
-            items: [
-                {
-                    icon: "msg",
-                    label: "Contacter le support",
-                    sub: "24h/24 · 7j/7",
-                    onPress: () => router.push("/(hotel)/support"),
-                },
-                { icon: "alert", label: "Déclarer un incident" },
-            ],
-        },
-        {
             title: "Compte",
             items: [
-                { icon: "settings", label: "Langue & thème", sub: "Français · Clair" },
                 { icon: "tag", label: "Conditions d'utilisation" },
                 { icon: "tag", label: "Politique de confidentialité" },
             ],
@@ -100,56 +104,49 @@ export default function HotelProfileScreen() {
     ];
 
     return (
-        <SafeAreaView
-            edges={["top"]}
-            style={[styles.container, { backgroundColor: colors.paper2 }]}
-        >
-            <View
-                style={[
-                    styles.header,
-                    { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
-                ]}
-            >
-                <ThemedText variate="title">Profil</ThemedText>
-            </View>
-
+        <View style={[styles.container, { backgroundColor: colors.paper }]}>
+            <StatusBarSpace color={colors.brand900} />
             <ScrollView
                 contentContainerStyle={styles.content}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Identity hero */}
-                <Card
-                    padding={18}
-                    style={[
-                        styles.identity,
-                        { backgroundColor: colors.brand900, borderColor: colors.brand900 },
-                    ]}
-                >
-                    <View style={styles.identityTop}>
-                        <View style={[styles.identityAvatar, { backgroundColor: colors.terra600 }]}>
-                            <Text style={[styles.identityAvatarText, { color: colors.paper }]}>
-                                {initials}
-                            </Text>
+                {/* Header marine — identité établissement */}
+                <MarineHeader style={styles.header}>
+                    <View style={styles.headerRow}>
+                        <View style={[styles.avatar, { backgroundColor: colors.brand800, borderColor: colors.brand700 }]}>
+                            <Text style={[styles.avatarText, { color: colors.terra600 }]}>{initials}</Text>
                         </View>
                         <View style={{ flex: 1 }}>
-                            <Text style={[styles.identityName, { color: colors.paper }]}>
-                                {user?.name ?? "Établissement"}
-                            </Text>
-                            <Text style={[styles.identityMeta, { color: colors.brand100 }]}>
-                                ★★★★ · Hôtel 4 étoiles
-                            </Text>
-                            <Text style={[styles.identitySub, { color: colors.brand100 }]}>
-                                {user?.email ?? ""}
+                            <Text style={styles.headerName}>{displayName}</Text>
+                            <Text style={[styles.headerSub, { color: colors.ink400 }]}>
+                                {[clientRef, typeLabel].filter(Boolean).join(" · ")}
                             </Text>
                         </View>
                     </View>
+                </MarineHeader>
 
-                    <View style={[styles.identityStats, { borderTopColor: colors.brand700 }]}>
-                        <IdentityStat value="52" label="Commandes / mois" color={colors.paper} sub={colors.brand100} />
-                        <IdentityStat value="3,2 t" label="Volume / mois" color={colors.paper} sub={colors.brand100} />
-                        <IdentityStat value="2024" label="Client depuis" color={colors.paper} sub={colors.brand100} />
-                    </View>
-                </Card>
+                {/* Informations établissement — données réelles */}
+                {profileRows.length > 0 && (
+                    <Card padding={0} style={[styles.infoCard, { borderColor: colors.ink200 }]}>
+                        {profileRows.map((r, i) => (
+                            <View
+                                key={r.k}
+                                style={[
+                                    styles.infoRow,
+                                    i < profileRows.length - 1 && {
+                                        borderBottomWidth: StyleSheet.hairlineWidth,
+                                        borderBottomColor: colors.ink200,
+                                    },
+                                ]}
+                            >
+                                <Text style={[styles.infoKey, { color: colors.ink600 }]}>{r.k}</Text>
+                                <Text style={[styles.infoValue, { color: colors.ink900 }]} numberOfLines={2}>
+                                    {r.v}
+                                </Text>
+                            </View>
+                        ))}
+                    </Card>
+                )}
 
                 {/* Préférences */}
                 <ThemedText variate="caps" color="ink500" style={styles.groupLabel}>
@@ -200,38 +197,19 @@ export default function HotelProfileScreen() {
                     onPress={handleLogout}
                     style={[
                         styles.logout,
-                        { backgroundColor: colors.paper, borderColor: colors.danger600 },
+                        { backgroundColor: colors.paper, borderColor: colors.danger100 },
                     ]}
                 >
                     <Icon name="logout" size={16} color={colors.danger600} />
                     <Text style={[styles.logoutText, { color: colors.danger600 }]}>
-                        Déconnexion
+                        Se déconnecter
                     </Text>
                 </Pressable>
 
                 <Text style={[styles.version, { color: colors.ink500 }]}>
-                    Blanchisserie SN · v1.0.0
+                    B&amp;C Teranga · v1.0.0
                 </Text>
             </ScrollView>
-        </SafeAreaView>
-    );
-}
-
-function IdentityStat({
-    value,
-    label,
-    color,
-    sub,
-}: {
-    value: string;
-    label: string;
-    color: string;
-    sub: string;
-}) {
-    return (
-        <View style={{ flex: 1 }}>
-            <Text style={[styles.identityStatValue, { color }]}>{value}</Text>
-            <Text style={[styles.identityStatLabel, { color: sub }]}>{label}</Text>
         </View>
     );
 }
@@ -302,74 +280,81 @@ function Divider() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: {
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-    },
 
     content: {
-        padding: 16,
         paddingBottom: 120,
     },
 
-    // Identity hero
-    identity: { marginBottom: 14 },
-    identityTop: {
+    // Header marine
+    header: {
+        paddingHorizontal: 20,
+        paddingTop: 14,
+        paddingBottom: 30,
+    },
+    headerRow: {
         flexDirection: "row",
         alignItems: "center",
         gap: 14,
     },
-    identityAvatar: {
-        width: 56,
-        height: 56,
-        borderRadius: 14,
+    avatar: {
+        width: 54,
+        height: 54,
+        borderRadius: 27,
+        borderWidth: StyleSheet.hairlineWidth,
         alignItems: "center",
         justifyContent: "center",
     },
-    identityAvatarText: {
+    avatarText: {
         fontFamily: FontFamily.uiSemibold,
-        fontSize: 20,
+        fontSize: 17,
     },
-    identityName: {
-        fontFamily: FontFamily.serifMedium,
-        fontSize: 20,
-        letterSpacing: -0.3,
+    headerName: {
+        fontFamily: FontFamily.serifSemibold,
+        fontSize: 19,
+        color: "#FFFFFF",
     },
-    identityMeta: {
+    headerSub: {
         fontFamily: FontFamily.uiRegular,
-        fontSize: Typography.fontSize.tiny,
+        fontSize: Typography.fontSize.xs,
         marginTop: 3,
     },
-    identitySub: {
-        fontFamily: FontFamily.uiRegular,
-        fontSize: Typography.fontSize.tiny,
-        marginTop: 2,
+
+    // Info card
+    infoCard: {
+        marginHorizontal: 20,
+        marginTop: 20,
+        borderRadius: 20,
+        borderWidth: StyleSheet.hairlineWidth,
+        paddingHorizontal: 18,
+        overflow: "hidden",
     },
-    identityStats: {
+    infoRow: {
         flexDirection: "row",
-        gap: 20,
-        marginTop: 14,
-        paddingTop: 14,
-        borderTopWidth: StyleSheet.hairlineWidth,
+        justifyContent: "space-between",
+        gap: 14,
+        paddingVertical: 13,
     },
-    identityStatValue: {
-        fontFamily: FontFamily.serifMedium,
-        fontSize: 20,
-    },
-    identityStatLabel: {
+    infoKey: {
         fontFamily: FontFamily.uiRegular,
-        fontSize: Typography.fontSize.micro,
-        marginTop: 2,
+        fontSize: Typography.fontSize.sm,
+        flexShrink: 0,
+    },
+    infoValue: {
+        fontFamily: FontFamily.uiMedium,
+        fontSize: Typography.fontSize.sm,
+        textAlign: "right",
+        flexShrink: 1,
     },
 
     // Group label + container
     groupLabel: {
+        marginHorizontal: 20,
         marginBottom: 8,
         marginTop: 14,
         paddingLeft: 4,
     },
     group: {
+        marginHorizontal: 20,
         overflow: "hidden",
     },
 
@@ -404,9 +389,10 @@ const styles = StyleSheet.create({
 
     // Logout
     logout: {
+        marginHorizontal: 20,
         marginTop: 18,
         padding: 12,
-        borderRadius: 10,
+        borderRadius: 16,
         borderWidth: StyleSheet.hairlineWidth,
         flexDirection: "row",
         alignItems: "center",

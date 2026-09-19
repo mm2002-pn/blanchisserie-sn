@@ -155,7 +155,7 @@ export default function DeliverScreen() {
         return (
             <SafeAreaView
                 edges={["top"]}
-                style={[styles.container, { backgroundColor: colors.paper2 }]}
+                style={[styles.container, { backgroundColor: colors.paper }]}
             >
                 <Text style={{ padding: 20, color: colors.ink500 }}>
                     Chargement…
@@ -167,18 +167,10 @@ export default function DeliverScreen() {
     return (
         <SafeAreaView
             edges={["top"]}
-            style={[styles.container, { backgroundColor: colors.paper2 }]}
+            style={[styles.container, { backgroundColor: colors.paper }]}
         >
             {/* Top bar */}
-            <View
-                style={[
-                    styles.topBar,
-                    {
-                        backgroundColor: colors.paper,
-                        borderBottomColor: colors.ink200,
-                    },
-                ]}
-            >
+            <View style={styles.topBar}>
                 <Pressable
                     onPress={handleClose}
                     hitSlop={6}
@@ -195,11 +187,11 @@ export default function DeliverScreen() {
                     </Text>
                 </View>
                 <View
-                    style={[styles.typePill, { backgroundColor: colors.baobab100 }]}
+                    style={[styles.typePill, { backgroundColor: colors.terra100 }]}
                 >
-                    <Icon name="truck" size={12} color={colors.baobab600} />
+                    <Icon name="truck" size={12} color={colors.terra700} />
                     <Text
-                        style={[styles.typePillText, { color: colors.baobab600 }]}
+                        style={[styles.typePillText, { color: colors.terra700 }]}
                     >
                         Livraison
                     </Text>
@@ -275,7 +267,7 @@ export default function DeliverScreen() {
                             styles.input,
                             {
                                 backgroundColor: colors.paper,
-                                borderColor: hasName ? colors.brand800 : colors.ink200,
+                                borderColor: hasName ? colors.brand900 : colors.ink200,
                             },
                         ]}
                     >
@@ -341,7 +333,7 @@ export default function DeliverScreen() {
                                 styles.photoAdd,
                                 {
                                     backgroundColor: colors.paper,
-                                    borderColor: colors.brand800,
+                                    borderColor: colors.terra600,
                                     opacity: uploadingPhoto ? 0.6 : 1,
                                 },
                             ]}
@@ -349,12 +341,12 @@ export default function DeliverScreen() {
                             <Icon
                                 name="camera"
                                 size={18}
-                                color={colors.brand800}
+                                color={colors.terra700}
                             />
                             <Text
                                 style={[
                                     styles.photoAddText,
-                                    { color: colors.brand800 },
+                                    { color: colors.terra700 },
                                 ]}
                             >
                                 {uploadingPhoto ? "Envoi…" : "Prendre"}
@@ -371,20 +363,20 @@ export default function DeliverScreen() {
                             styles.signBtn,
                             {
                                 backgroundColor: signed ? colors.ok100 : colors.paper,
-                                borderColor: signed ? colors.ok600 : colors.brand800,
+                                borderColor: signed ? colors.ok600 : colors.terra600,
                             },
                         ]}
                     >
                         <Icon
                             name={signed ? "check" : "signature"}
                             size={18}
-                            color={signed ? colors.ok700 : colors.brand800}
+                            color={signed ? colors.ok700 : colors.terra700}
                             stroke={2}
                         />
                         <Text
                             style={[
                                 styles.signBtnText,
-                                { color: signed ? colors.ok700 : colors.brand800 },
+                                { color: signed ? colors.ok700 : colors.terra700 },
                             ]}
                         >
                             {signed ? "Signature ajoutée" : "Faire signer"}
@@ -412,7 +404,7 @@ export default function DeliverScreen() {
                         styles.validateBtn,
                         {
                             backgroundColor: canValidate
-                                ? colors.baobab600
+                                ? colors.brand900
                                 : colors.ink300,
                         },
                     ]}
@@ -493,7 +485,6 @@ const styles = StyleSheet.create({
         gap: 12,
         paddingHorizontal: 16,
         paddingVertical: 12,
-        borderBottomWidth: StyleSheet.hairlineWidth,
     },
     backBtn: {
         width: 36,
@@ -529,7 +520,7 @@ const styles = StyleSheet.create({
 
     clientCard: {
         padding: 14,
-        borderRadius: 12,
+        borderRadius: 18,
         borderWidth: StyleSheet.hairlineWidth,
         gap: 8,
     },

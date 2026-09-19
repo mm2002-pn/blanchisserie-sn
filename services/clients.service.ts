@@ -10,6 +10,12 @@ export interface ApiClient {
     email?: string | null;
     geoLat?: number | null;
     geoLng?: number | null;
+    ninea?: string | null;
+    contactPerson?: string | null;
+    billingMode?: 'per_order' | 'monthly';
+    createdAt?: string;
+    tariff?: { name: string } | null;
+    _count?: { orders: number; invoices: number };
 }
 
 /** Récupère un client par id. Le backend filtre déjà : un user "hotel"

@@ -19,9 +19,12 @@ import { fr } from "date-fns/locale";
 import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
 import ThemedText from "@/components/ui/ThemedText";
+import { MarineHeader } from "@/components/shared/MarineHeader";
+import { StatusBarSpace } from "@/components/shared/StatusBarSpace";
 import { FontFamily, Typography } from "@/constants/Typography";
 import { useThemeColors } from "@/hooks/useThemeColors";
 import {
+    useMyRounds,
     useRound,
     useStartRound,
     useUnloadRound,
@@ -32,11 +35,20 @@ export default function TourDetailScreen() {
     const router = useRouter();
     const colors = useThemeColors();
     const params = useLocalSearchParams();
-    const roundId = (params.roundId as string | undefined) ?? null;
+    const paramRoundId = (params.roundId as string | undefined) ?? null;
 
     // Branche le realtime pour rafraîchir la tournée quand une commande
     // est collectée (depuis ce screen ou un autre device).
     useOrdersRealtime();
+
+    // Onglet "Arrêt" pressé directement (sans params) → on affiche la
+    // tournée active du jour : en cours en priorité, sinon la prochaine
+    // planifiée. Le param `roundId` (venant du drawer "Tournée") reste
+    // prioritaire pour cibler une tournée précise.
+    const { data: inProgressRounds = [] } = useMyRounds({ status: "in_progress" });
+    const { data: plannedRounds = [] } = useMyRounds({ status: "planned" });
+    const roundId =
+        paramRoundId ?? inProgressRounds[0]?.id ?? plannedRounds[0]?.id ?? null;
 
     const { data: round, isLoading } = useRound(roundId);
     const start = useStartRound();
@@ -128,11 +140,31 @@ export default function TourDetailScreen() {
         }
     };
 
+    if (!roundId) {
+        return (
+            <SafeAreaView
+                edges={["top"]}
+                style={[styles.container, { backgroundColor: colors.paper }]}
+            >
+                <View style={styles.empty}>
+                    <Icon name="boxes" size={28} color={colors.ink400} />
+                    <Text style={[styles.emptyTitle, { color: colors.ink800 }]}>
+                        Aucune tournée active
+                    </Text>
+                    <Text style={[styles.emptySub, { color: colors.ink500 }]}>
+                        L'admin t'enverra une notification quand une tournée te
+                        sera assignée.
+                    </Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
     if (isLoading || !round) {
         return (
             <SafeAreaView
                 edges={["top"]}
-                style={[styles.container, { backgroundColor: colors.paper2 }]}
+                style={[styles.container, { backgroundColor: colors.paper }]}
             >
                 <Text style={{ padding: 20, color: colors.ink500 }}>
                     Chargement…
@@ -145,69 +177,9 @@ export default function TourDetailScreen() {
     const planned = round.status === "planned";
 
     return (
-        <SafeAreaView
-            edges={["top"]}
-            style={[styles.container, { backgroundColor: colors.paper2 }]}
-        >
-            {/* Top bar */}
-            <View
-                style={[
-                    styles.topBar,
-                    {
-                        backgroundColor: colors.paper,
-                        borderBottomColor: colors.ink200,
-                    },
-                ]}
-            >
-                <Pressable
-                    onPress={() => router.back()}
-                    hitSlop={6}
-                    style={[styles.backBtn, { backgroundColor: colors.ink100 }]}
-                >
-                    <Icon name="chevLeft" size={16} color={colors.ink800} />
-                </Pressable>
-                <View style={{ flex: 1 }}>
-                    <Text style={[styles.topNumber, { color: colors.ink900 }]}>
-                        Tournée {round.number}
-                    </Text>
-                    <Text style={[styles.topSub, { color: colors.ink500 }]}>
-                        {format(new Date(round.plannedAt), "EEEE d MMMM 'à' HH:mm", {
-                            locale: fr,
-                        })}
-                    </Text>
-                </View>
-                <View
-                    style={[
-                        styles.statusPill,
-                        {
-                            backgroundColor: inProgress
-                                ? colors.baobab600
-                                : allDone
-                                  ? colors.ok700
-                                  : colors.brand100,
-                        },
-                    ]}
-                >
-                    <Text
-                        style={[
-                            styles.statusText,
-                            {
-                                color:
-                                    inProgress || allDone ? colors.paper : colors.brand800,
-                            },
-                        ]}
-                    >
-                        {allDone
-                            ? "Terminée"
-                            : inProgress
-                              ? "En cours"
-                              : "Planifiée"}
-                    </Text>
-                </View>
-            </View>
-
+        <View style={[styles.container, { backgroundColor: colors.paper }]}>
+            <StatusBarSpace color={colors.brand900} />
             <ScrollView
-                contentContainerStyle={styles.content}
                 showsVerticalScrollIndicator={false}
                 refreshControl={
                     <RefreshControl
@@ -218,6 +190,51 @@ export default function TourDetailScreen() {
                     />
                 }
             >
+                {/* Header marine — arrêt en cours, comme la maquette (défile avec le contenu) */}
+                <MarineHeader style={styles.heroHeader}>
+                    <View style={styles.heroRow}>
+                        <Pressable
+                            onPress={() => router.back()}
+                            hitSlop={6}
+                            style={[
+                                styles.heroIconChip,
+                                { backgroundColor: colors.brand800, borderColor: colors.brand600 },
+                            ]}
+                        >
+                            <Icon name="chevLeft" size={16} color="#FFFFFF" stroke={1.8} />
+                        </Pressable>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.heroTitle}>Tournée {round.number}</Text>
+                            <Text style={[styles.heroSub, { color: colors.ink400 }]}>
+                                {format(new Date(round.plannedAt), "EEEE d MMMM 'à' HH:mm", {
+                                    locale: fr,
+                                })}
+                            </Text>
+                        </View>
+                        <View
+                            style={[
+                                styles.statusPill,
+                                {
+                                    backgroundColor: inProgress
+                                        ? colors.terra600
+                                        : allDone
+                                          ? colors.ok700
+                                          : colors.brand800,
+                                },
+                            ]}
+                        >
+                            <Text style={[styles.statusText, { color: "#FFFFFF" }]}>
+                                {allDone
+                                    ? "Terminée"
+                                    : inProgress
+                                      ? "En cours"
+                                      : "Planifiée"}
+                            </Text>
+                        </View>
+                    </View>
+                </MarineHeader>
+
+                <View style={styles.content}>
                 {/* Progrès */}
                 <Card padding={16} style={{ marginBottom: 14 }}>
                     <View style={styles.progressHead}>
@@ -280,7 +297,7 @@ export default function TourDetailScreen() {
                         disabled={start.isPending}
                         style={[
                             styles.startBtn,
-                            { backgroundColor: colors.baobab600 },
+                            { backgroundColor: colors.terra600 },
                         ]}
                     >
                         <Icon name="truck" size={18} color={colors.paper} stroke={2} />
@@ -429,6 +446,7 @@ export default function TourDetailScreen() {
                 </View>
 
                 <View style={{ height: 40 }} />
+                </View>
             </ScrollView>
 
             {/* Modale confirmation arrivée usine */}
@@ -607,7 +625,7 @@ export default function TourDetailScreen() {
                     setUnloadSignatureOpen(false);
                 }}
             />
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -732,7 +750,7 @@ function StopRow({
                             styles.collectBtn,
                             {
                                 backgroundColor: roundInProgress
-                                    ? colors.brand800
+                                    ? colors.terra600
                                     : colors.ink200,
                                 opacity: roundInProgress ? 1 : 0.6,
                             },
@@ -767,29 +785,50 @@ function StopRow({
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    topBar: {
+    empty: {
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        paddingHorizontal: 24,
+    },
+    emptyTitle: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.sm,
+        marginTop: 6,
+    },
+    emptySub: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
+        textAlign: "center",
+    },
+    heroHeader: {
+        paddingHorizontal: 20,
+        paddingTop: 8,
+        paddingBottom: 24,
+    },
+    heroRow: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderBottomWidth: StyleSheet.hairlineWidth,
+        gap: 14,
     },
-    backBtn: {
-        width: 34,
-        height: 34,
-        borderRadius: 99,
+    heroIconChip: {
+        width: 38,
+        height: 38,
+        borderRadius: 12,
+        borderWidth: StyleSheet.hairlineWidth,
         alignItems: "center",
         justifyContent: "center",
     },
-    topNumber: {
-        fontFamily: FontFamily.serifMedium,
-        fontSize: 18,
+    heroTitle: {
+        fontFamily: FontFamily.serifSemibold,
+        fontSize: 17,
+        color: "#FFFFFF",
     },
-    topSub: {
+    heroSub: {
         fontFamily: FontFamily.uiRegular,
         fontSize: Typography.fontSize.tiny,
-        marginTop: 1,
+        marginTop: 2,
     },
     statusPill: {
         paddingHorizontal: 10,

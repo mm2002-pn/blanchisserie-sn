@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { StyleSheet } from "react-native";
+import { StyleSheet, type ColorValue } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon, { IconName } from "@/components/ui/Icon";
 import { FontFamily, Typography } from "@/constants/Typography";
@@ -38,7 +38,7 @@ export default function HotelLayout() {
                 options={{
                     title: "Accueil",
                     tabBarIcon: ({ color, focused }) => (
-                        <TabIcon name="home" color={color} focused={focused} />
+                        <TabIcon name="home" color={color as string} focused={focused} />
                     ),
                 }}
             />
@@ -47,7 +47,7 @@ export default function HotelLayout() {
                 options={{
                     title: "Commandes",
                     tabBarIcon: ({ color, focused }) => (
-                        <TabIcon name="package" color={color} focused={focused} />
+                        <TabIcon name="package" color={color as string} focused={focused} />
                     ),
                 }}
             />
@@ -56,7 +56,7 @@ export default function HotelLayout() {
                 options={{
                     title: "Factures",
                     tabBarIcon: ({ color, focused }) => (
-                        <TabIcon name="receipt" color={color} focused={focused} />
+                        <TabIcon name="receipt" color={color as string} focused={focused} />
                     ),
                 }}
             />
@@ -65,7 +65,7 @@ export default function HotelLayout() {
                 options={{
                     title: "Profil",
                     tabBarIcon: ({ color, focused }) => (
-                        <TabIcon name="user" color={color} focused={focused} />
+                        <TabIcon name="user" color={color as string} focused={focused} />
                     ),
                 }}
             />
@@ -76,6 +76,7 @@ export default function HotelLayout() {
                 options={{ href: null, title: "Validation" }}
             />
             <Tabs.Screen name="order-details" options={{ href: null, title: "Détail commande" }} />
+            <Tabs.Screen name="invoice-detail" options={{ href: null, title: "Détail facture" }} />
             <Tabs.Screen name="planning" options={{ href: null, title: "Planning" }} />
             <Tabs.Screen name="support" options={{ href: null, title: "Support" }} />
         </Tabs>
@@ -88,8 +89,8 @@ function TabIcon({
     focused,
 }: {
     name: IconName;
-    color: string;
+    color: ColorValue;
     focused: boolean;
 }) {
-    return <Icon name={name} size={20} color={color} stroke={focused ? 2 : 1.6} />;
+    return <Icon name={name} size={20} color={color as string} stroke={focused ? 2 : 1.6} />;
 }

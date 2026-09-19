@@ -1,25 +1,27 @@
 /**
- * Blanchisserie SN — Typographie
- * Serif (titres éditoriaux) · Bricolage Grotesque
- * UI (corps, labels)        · Manrope
- * Numériques (kg, XOF)      · DM Mono (tabular-nums)
+ * B&C Teranga — Typographie
+ * Titres / UI  · Outfit
+ * Corps de texte · Source Sans 3
+ * Numériques (kg, XOF) · Outfit (tabular-nums)
  *
- * Les polices sont chargées via `useFonts` dans `app/_layout.tsx`
+ * Les polices sont chargées via `useFonts` dans `app/_layout.tsx`.
+ * Les noms de clés ci-dessous sont conservés (serif, ui, mono) pour ne pas
+ * casser les écrans existants — ils pointent désormais vers Outfit/Source Sans 3.
  * Les variantes avec poids sont nommées directement — ne PAS cumuler avec `fontWeight` sur RN.
  */
 
 export const FontFamily = {
-    serifRegular: "BricolageGrotesque_400Regular",
-    serifMedium: "BricolageGrotesque_500Medium",
-    serifSemibold: "BricolageGrotesque_600SemiBold",
+    serifRegular: "Outfit_400Regular",
+    serifMedium: "Outfit_500Medium",
+    serifSemibold: "Outfit_600SemiBold",
 
-    uiRegular: "Manrope_400Regular",
-    uiMedium: "Manrope_500Medium",
-    uiSemibold: "Manrope_600SemiBold",
-    uiBold: "Manrope_700Bold",
+    uiRegular: "SourceSans3_400Regular",
+    uiMedium: "SourceSans3_500Medium",
+    uiSemibold: "SourceSans3_600SemiBold",
+    uiBold: "Outfit_700Bold",
 
-    monoRegular: "DMMono_400Regular",
-    monoMedium: "DMMono_500Medium",
+    monoRegular: "Outfit_400Regular",
+    monoMedium: "Outfit_500Medium",
 } as const;
 
 export const Typography = {

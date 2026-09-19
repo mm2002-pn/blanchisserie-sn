@@ -1,33 +1,26 @@
 import {
-    BricolageGrotesque_400Regular,
-    BricolageGrotesque_500Medium,
-    BricolageGrotesque_600SemiBold,
-} from "@expo-google-fonts/bricolage-grotesque";
+    Outfit_400Regular,
+    Outfit_500Medium,
+    Outfit_600SemiBold,
+    Outfit_700Bold,
+} from "@expo-google-fonts/outfit";
 import {
-    Manrope_400Regular,
-    Manrope_500Medium,
-    Manrope_600SemiBold,
-    Manrope_700Bold,
-} from "@expo-google-fonts/manrope";
-import {
-    DMMono_400Regular,
-    DMMono_500Medium,
-} from "@expo-google-fonts/dm-mono";
+    SourceSans3_400Regular,
+    SourceSans3_500Medium,
+    SourceSans3_600SemiBold,
+} from "@expo-google-fonts/source-sans-3";
 
 /**
  * Carte des polices à charger via `useFonts`. Les noms de clés correspondent
  * exactement aux `fontFamily` utilisées dans `constants/Typography.ts`.
  */
 export const appFonts = {
-    BricolageGrotesque_400Regular,
-    BricolageGrotesque_500Medium,
-    BricolageGrotesque_600SemiBold,
+    Outfit_400Regular,
+    Outfit_500Medium,
+    Outfit_600SemiBold,
+    Outfit_700Bold,
 
-    Manrope_400Regular,
-    Manrope_500Medium,
-    Manrope_600SemiBold,
-    Manrope_700Bold,
-
-    DMMono_400Regular,
-    DMMono_500Medium,
+    SourceSans3_400Regular,
+    SourceSans3_500Medium,
+    SourceSans3_600SemiBold,
 };

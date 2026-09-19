@@ -350,7 +350,7 @@ function getAccent(
 
 const styles = StyleSheet.create({
     root: { flex: 1, flexDirection: "row" },
-    overlay: { ...StyleSheet.absoluteFillObject },
+    overlay: { ...StyleSheet.absoluteFill },
     drawer: {
         height: "100%",
         borderRightWidth: StyleSheet.hairlineWidth,

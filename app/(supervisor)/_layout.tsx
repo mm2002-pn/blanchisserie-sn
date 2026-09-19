@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { StyleSheet } from "react-native";
+import { StyleSheet, type ColorValue } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon, { IconName } from "@/components/ui/Icon";
 import { FontFamily, Typography } from "@/constants/Typography";
@@ -38,7 +38,7 @@ export default function SupervisorLayout() {
                 options={{
                     title: "Pesée",
                     tabBarIcon: ({ color, focused }) => (
-                        <TabIcon name="weight" color={color} focused={focused} />
+                        <TabIcon name="weight" color={color as string} focused={focused} />
                     ),
                 }}
             />
@@ -47,7 +47,7 @@ export default function SupervisorLayout() {
                 options={{
                     title: "Triage",
                     tabBarIcon: ({ color, focused }) => (
-                        <TabIcon name="filter" color={color} focused={focused} />
+                        <TabIcon name="filter" color={color as string} focused={focused} />
                     ),
                 }}
             />
@@ -56,7 +56,7 @@ export default function SupervisorLayout() {
                 options={{
                     title: "Production",
                     tabBarIcon: ({ color, focused }) => (
-                        <TabIcon name="boxes" color={color} focused={focused} />
+                        <TabIcon name="boxes" color={color as string} focused={focused} />
                     ),
                 }}
             />
@@ -65,7 +65,7 @@ export default function SupervisorLayout() {
                 options={{
                     title: "Machines",
                     tabBarIcon: ({ color, focused }) => (
-                        <TabIcon name="settings" color={color} focused={focused} />
+                        <TabIcon name="settings" color={color as string} focused={focused} />
                     ),
                 }}
             />
@@ -74,7 +74,7 @@ export default function SupervisorLayout() {
                 options={{
                     title: "Profil",
                     tabBarIcon: ({ color, focused }) => (
-                        <TabIcon name="user" color={color} focused={focused} />
+                        <TabIcon name="user" color={color as string} focused={focused} />
                     ),
                 }}
             />
@@ -93,8 +93,8 @@ function TabIcon({
     focused,
 }: {
     name: IconName;
-    color: string;
+    color: ColorValue;
     focused: boolean;
 }) {
-    return <Icon name={name} size={20} color={color} stroke={focused ? 2 : 1.6} />;
+    return <Icon name={name} size={20} color={color as string} stroke={focused ? 2 : 1.6} />;
 }

@@ -1,5 +1,7 @@
 import { api } from './api';
 
+export type DriverAvailability = 'available' | 'on_route' | 'off_duty' | 'unavailable';
+
 interface ApiUser {
   id: string;
   email: string;
@@ -9,6 +11,7 @@ interface ApiUser {
   role: 'admin' | 'manager' | 'supervisor' | 'operator' | 'driver' | 'hotel';
   isActive: boolean;
   lastLoginAt: string | null;
+  driverStatus?: DriverAvailability | null;
 }
 
 interface PageResult<T> {
@@ -63,4 +66,18 @@ export async function listTeamMembers(): Promise<UiTeamMember[]> {
       shift: '07:00 – 15:00',
       productivityPct: 90, // pas exposé par API
     }));
+}
+
+/** Statut de disponibilité d'un chauffeur (self ou admin/manager/supervisor). */
+export async function getDriverStatus(id: string): Promise<DriverAvailability | null> {
+  const { data } = await api.get<ApiUser>(`/users/${id}`);
+  return data.driverStatus ?? null;
+}
+
+/** Change le statut de disponibilité d'un chauffeur — self-service autorisé. */
+export async function setDriverStatus(
+  id: string,
+  driverStatus: DriverAvailability,
+): Promise<void> {
+  await api.patch(`/users/${id}/driver-status`, { driverStatus });
 }

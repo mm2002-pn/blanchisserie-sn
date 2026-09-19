@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+    Alert,
     Animated,
     Dimensions,
     PanResponder,
@@ -10,7 +11,11 @@ import {
     Text,
     View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+// Depuis SDK 56, expo-router n'est plus compatible avec un import direct de
+// @react-navigation/bottom-tabs (deux copies du module coexisteraient) — il
+// faut passer par le fork interne réexporté ici.
+import { useBottomTabBarHeight } from "expo-router/tabs";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import MapView, {
     Marker,
@@ -25,10 +30,10 @@ import { fetchRoute, type LatLng } from "@/services/routing.service";
 
 import Icon from "@/components/ui/Icon";
 import ThemedText from "@/components/ui/ThemedText";
-import DrawerMenu from "@/components/shared/DrawerMenu";
 import { NotificationBell } from "@/components/shared/NotificationBell";
 import { NotificationsModal } from "@/components/shared/NotificationsModal";
 import { FontFamily, Typography } from "@/constants/Typography";
+import { useAuth } from "@/contexts/AuthContext";
 import { useThemeColors } from "@/hooks/useThemeColors";
 import { useMyRounds } from "@/hooks/useCollectionRounds";
 import { useOrdersRealtime } from "@/hooks/useOrdersRealtime";
@@ -62,13 +67,31 @@ const DEFAULT_REGION: Region = {
 };
 
 const { height: SCREEN_H } = Dimensions.get("window");
-const SNAP_PEEK = 180;
-const SNAP_MID = Math.round(SCREEN_H * 0.5);
-const SNAP_FULL = Math.round(SCREEN_H * 0.85);
+// Hauteur du tiroir replié ("peek") — mesurée en vrai sur le header (poignée
+// + titre) via onLayout, pour ne jamais laisser dépasser un bout de carte en
+// dessous. Cette valeur de départ n'est qu'un fallback avant la 1ère mesure.
+const SNAP_PEEK_FALLBACK = 130;
+// Marge réservée en haut pour le header flottant (safe area + barre + tuiles
+// stats) — le tiroir "full" ne doit jamais monter par-dessus (sinon il
+// recouvre "Arrêts"/"Chargé").
+const FULL_TOP_CLEARANCE = 230;
 
 export default function DriverRouteScreen() {
     const router = useRouter();
     const colors = useThemeColors();
+    const { logout } = useAuth();
+    const insets = useSafeAreaInsets();
+    // Hauteur réelle de la tab bar (le screen occupe SCREEN_H moins ça —
+    // sans cette correction le tiroir "peek" se retrouve positionné SOUS la
+    // tab bar, donc invisible derrière elle).
+    const tabBarHeight = useBottomTabBarHeight();
+    const visibleH = SCREEN_H - tabBarHeight;
+    // Hauteur réelle du header du tiroir (poignée+titre), mesurée via onLayout.
+    const peekRef = useRef(SNAP_PEEK_FALLBACK);
+    const snapMidRef = useRef(Math.round(visibleH * 0.5));
+    const snapFullRef = useRef(visibleH - FULL_TOP_CLEARANCE);
+    snapMidRef.current = Math.round(visibleH * 0.5);
+    snapFullRef.current = visibleH - FULL_TOP_CLEARANCE;
     // Params de "focus" envoyés depuis tour-detail / collections quand
     // l'utilisateur appuie sur "Naviguer" — on trace alors la route ici.
     const params = useLocalSearchParams<{
@@ -78,7 +101,6 @@ export default function DriverRouteScreen() {
         focusLng?: string;
         focusName?: string;
     }>();
-    const [drawerVisible, setDrawerVisible] = useState(false);
     const [notifsOpen, setNotifsOpen] = useState(false);
     const [selectedStopId, setSelectedStopId] = useState<string | null>(null);
     // Itinéraire actif : suite de coordonnées à dessiner en polyline sur la carte
@@ -143,15 +165,15 @@ export default function DriverRouteScreen() {
     }, [stops]);
 
     /* ── Drawer animé ── */
-    const drawerY = useRef(new Animated.Value(SCREEN_H - SNAP_PEEK)).current;
-    const lastSnap = useRef(SCREEN_H - SNAP_PEEK);
+    const drawerY = useRef(new Animated.Value(visibleH - peekRef.current)).current;
+    const lastSnap = useRef(visibleH - peekRef.current);
     const [snapState, setSnapState] = useState<"peek" | "mid" | "full">("peek");
 
     const snapTo = (offset: number) => {
         lastSnap.current = offset;
         // Update state pour re-render du chevron (rotation selon position)
-        if (offset === SCREEN_H - SNAP_FULL) setSnapState("full");
-        else if (offset === SCREEN_H - SNAP_MID) setSnapState("mid");
+        if (offset === visibleH - snapFullRef.current) setSnapState("full");
+        else if (offset === visibleH - snapMidRef.current) setSnapState("mid");
         else setSnapState("peek");
         Animated.spring(drawerY, {
             toValue: offset,
@@ -165,8 +187,8 @@ export default function DriverRouteScreen() {
     const toggleDrawer = () => {
         snapTo(
             snapState === "peek"
-                ? SCREEN_H - SNAP_FULL
-                : SCREEN_H - SNAP_PEEK,
+                ? visibleH - snapFullRef.current
+                : visibleH - peekRef.current,
         );
     };
 
@@ -175,17 +197,17 @@ export default function DriverRouteScreen() {
             onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 4,
             onPanResponderMove: (_, g) => {
                 const next = Math.max(
-                    SCREEN_H - SNAP_FULL,
-                    Math.min(SCREEN_H - SNAP_PEEK, lastSnap.current + g.dy),
+                    visibleH - snapFullRef.current,
+                    Math.min(visibleH - peekRef.current, lastSnap.current + g.dy),
                 );
                 drawerY.setValue(next);
             },
             onPanResponderRelease: (_, g) => {
                 const settledY = lastSnap.current + g.dy;
                 const snaps = [
-                    SCREEN_H - SNAP_PEEK,
-                    SCREEN_H - SNAP_MID,
-                    SCREEN_H - SNAP_FULL,
+                    visibleH - peekRef.current,
+                    visibleH - snapMidRef.current,
+                    visibleH - snapFullRef.current,
                 ];
                 const target = snaps.reduce((best, cur) =>
                     Math.abs(cur - settledY) < Math.abs(best - settledY) ? cur : best,
@@ -194,6 +216,20 @@ export default function DriverRouteScreen() {
             },
         }),
     ).current;
+
+    const handleLogout = () => {
+        Alert.alert("Terminer la journée", "Tu vas être déconnecté.", [
+            { text: "Annuler", style: "cancel" },
+            {
+                text: "Terminer",
+                style: "destructive",
+                onPress: async () => {
+                    await logout();
+                    router.replace("/(auth)/sign-in");
+                },
+            },
+        ]);
+    };
 
     const focusStop = (stop: MapStop) => {
         setSelectedStopId(stop.id);
@@ -278,7 +314,7 @@ export default function DriverRouteScreen() {
             raw: {} as RoundOrder,
         };
         // Replie le drawer pour bien voir la carte
-        snapTo(SCREEN_H - SNAP_PEEK);
+        snapTo(visibleH - peekRef.current);
         setSelectedStopId(stop.id);
         void navigateToStop(stop);
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -292,6 +328,11 @@ export default function DriverRouteScreen() {
 
     const totalStops = stops.length;
     const completedStops = stops.filter((s) => s.status === "completed").length;
+    const loadedKg = stops
+        .filter((s) => s.status === "completed")
+        .reduce((sum, s) => sum + s.weightKg, 0);
+    /** Premier arrêt non fait, toutes tournées actives confondues — mis en avant (halo terracotta). */
+    const nextStopId = stops.find((s) => s.status === "pending")?.id ?? null;
 
     return (
         <View style={[styles.container, { backgroundColor: colors.ink900 }]}>
@@ -299,7 +340,7 @@ export default function DriverRouteScreen() {
             <MapView
                 ref={mapRef}
                 provider={PROVIDER_DEFAULT}
-                style={StyleSheet.absoluteFillObject}
+                style={StyleSheet.absoluteFill}
                 initialRegion={DEFAULT_REGION}
                 showsUserLocation
                 showsMyLocationButton={false}
@@ -308,6 +349,12 @@ export default function DriverRouteScreen() {
                 {stops.map((stop) => {
                     const isSelected = stop.id === selectedStopId;
                     const isDone = stop.status === "completed";
+                    const isNext = stop.id === nextStopId;
+                    const pinColor = isDone
+                        ? colors.ok700
+                        : isNext
+                          ? colors.terra600
+                          : colors.brand900;
                     return (
                         <Marker
                             key={stop.id}
@@ -326,9 +373,7 @@ export default function DriverRouteScreen() {
                                         styles.pinLabel,
                                         {
                                             backgroundColor: colors.paper,
-                                            borderColor: isDone
-                                                ? colors.ok700
-                                                : colors.brand800,
+                                            borderColor: pinColor,
                                             transform: [{ scale: isSelected ? 1.05 : 1 }],
                                         },
                                     ]}
@@ -343,32 +388,38 @@ export default function DriverRouteScreen() {
                                         {stop.name}
                                     </Text>
                                 </View>
-                                <View
-                                    style={[
-                                        styles.pin,
-                                        {
-                                            backgroundColor: isDone
-                                                ? colors.ok700
-                                                : colors.brand800,
-                                            borderColor: colors.paper,
-                                            transform: [{ scale: isSelected ? 1.2 : 1 }],
-                                        },
-                                    ]}
-                                >
-                                    <Icon
-                                        name={isDone ? "check" : "package"}
-                                        size={14}
-                                        color={colors.paper}
-                                        stroke={2}
-                                    />
+                                <View style={styles.pinCircleWrap}>
+                                    {isNext && (
+                                        <View
+                                            style={[
+                                                styles.pinHalo,
+                                                { backgroundColor: colors.terra600 },
+                                            ]}
+                                        />
+                                    )}
+                                    <View
+                                        style={[
+                                            styles.pin,
+                                            {
+                                                backgroundColor: pinColor,
+                                                borderColor: colors.paper,
+                                                transform: [{ scale: isSelected ? 1.2 : 1 }],
+                                            },
+                                        ]}
+                                    >
+                                        <Icon
+                                            name={isDone ? "check" : "package"}
+                                            size={14}
+                                            color={colors.paper}
+                                            stroke={2}
+                                        />
+                                    </View>
                                 </View>
                                 <View
                                     style={[
                                         styles.pinTail,
                                         {
-                                            borderTopColor: isDone
-                                                ? colors.ok700
-                                                : colors.brand800,
+                                            borderTopColor: pinColor,
                                         },
                                     ]}
                                 />
@@ -436,28 +487,52 @@ export default function DriverRouteScreen() {
                         { backgroundColor: colors.paper, borderColor: colors.ink200 },
                     ]}
                 >
-                    <Pressable
-                        onPress={() => setDrawerVisible(true)}
-                        hitSlop={6}
-                        style={[
-                            styles.topIcon,
-                            { backgroundColor: colors.ink100 },
-                        ]}
-                    >
-                        <Icon name="list" size={18} color={colors.ink800} />
-                    </Pressable>
                     <View style={{ flex: 1 }}>
                         <Text style={[styles.topTitle, { color: colors.ink900 }]}>
-                            Mes tournées
+                            Ma tournée
                         </Text>
                         <Text style={[styles.topSub, { color: colors.ink500 }]}>
                             {activeRounds.length} tournée
-                            {activeRounds.length > 1 ? "s" : ""} · {completedStops}/
-                            {totalStops} stop{totalStops > 1 ? "s" : ""}
+                            {activeRounds.length > 1 ? "s" : ""} active
+                            {activeRounds.length > 1 ? "s" : ""}
                         </Text>
                     </View>
                     <NotificationBell onPress={() => setNotifsOpen(true)} />
+                    <Pressable
+                        onPress={handleLogout}
+                        hitSlop={6}
+                        style={[styles.topIcon, { backgroundColor: colors.ink100 }]}
+                    >
+                        <Icon name="logout" size={16} color={colors.danger600} />
+                    </Pressable>
                 </View>
+
+                {totalStops > 0 && (
+                    <View style={styles.statsRow}>
+                        <View style={[styles.statTile, { backgroundColor: colors.paper }]}>
+                            <Text style={[styles.statLabel, { color: colors.ink600 }]}>
+                                Arrêts
+                            </Text>
+                            <Text style={[styles.statValue, { color: colors.ink900 }]}>
+                                {completedStops}
+                                <Text style={[styles.statValueUnit, { color: colors.ink400 }]}>
+                                    /{totalStops}
+                                </Text>
+                            </Text>
+                        </View>
+                        <View style={[styles.statTile, { backgroundColor: colors.paper }]}>
+                            <Text style={[styles.statLabel, { color: colors.ink600 }]}>
+                                Chargé
+                            </Text>
+                            <Text style={[styles.statValue, { color: colors.ink900 }]}>
+                                {loadedKg.toFixed(0)}
+                                <Text style={[styles.statValueUnit, { color: colors.ink400 }]}>
+                                    {" "}kg
+                                </Text>
+                            </Text>
+                        </View>
+                    </View>
+                )}
             </SafeAreaView>
 
             {/* ─── Bottom Drawer ─────────────────────────── */}
@@ -467,13 +542,29 @@ export default function DriverRouteScreen() {
                     {
                         backgroundColor: colors.paper,
                         transform: [{ translateY: drawerY }],
-                        height: SNAP_FULL,
+                        height: snapFullRef.current,
                     },
                 ]}
             >
                 <Pressable
                     onPress={toggleDrawer}
                     {...panResponder.panHandlers}
+                    onLayout={(e) => {
+                        // Mesure réelle du header (poignée+titre) + marge home-indicator
+                        // + petite marge de sécurité — pour être sûr qu'aucune carte ne
+                        // dépasse en dessous (mieux vaut cacher 1-2px de blanc en trop
+                        // que laisser filtrer le haut d'une carte).
+                        const measured =
+                            Math.ceil(e.nativeEvent.layout.height) + insets.bottom + 16;
+                        if (Math.abs(measured - peekRef.current) > 2) {
+                            const wasAtPeek = snapState === "peek";
+                            peekRef.current = measured;
+                            if (wasAtPeek) {
+                                lastSnap.current = visibleH - measured;
+                                drawerY.setValue(visibleH - measured);
+                            }
+                        }
+                    }}
                     style={styles.drawerHeader}
                 >
                     <View
@@ -521,8 +612,27 @@ export default function DriverRouteScreen() {
                     </View>
                 </Pressable>
 
+                {/* Lien vers la liste complète (avec tournées terminées + filtres) —
+                    toujours visible, même replié, pour ne pas obliger à ouvrir le
+                    tiroir d'abord. */}
+                <Pressable
+                    onPress={() => router.push("/(driver)/collections")}
+                    style={styles.seeAllLink}
+                    hitSlop={6}
+                >
+                    <Text style={[styles.seeAllLinkText, { color: colors.brand800 }]}>
+                        Voir toutes les tournées
+                    </Text>
+                    <Icon name="chevRight" size={13} color={colors.brand800} stroke={2} />
+                </Pressable>
+
                 {/* La ScrollView prend toute la hauteur restante du drawer
-                    (flex:1) pour pouvoir scroller sur tout le contenu. */}
+                    (flex:1) pour pouvoir scroller sur tout le contenu.
+                    Non montée du tout en "peek" — filet de sécurité radical :
+                    aucune carte ne peut être visible tant que le tiroir n'est
+                    pas ouvert, quelle que soit la précision du calcul de
+                    hauteur du header (contrairement à un simple opacity:0). */}
+                {snapState !== "peek" && (
                 <ScrollView
                     style={styles.drawerScroll}
                     contentContainerStyle={styles.drawerList}
@@ -583,12 +693,9 @@ export default function DriverRouteScreen() {
                         ))
                     )}
                 </ScrollView>
+                )}
             </Animated.View>
 
-            <DrawerMenu
-                visible={drawerVisible}
-                onClose={() => setDrawerVisible(false)}
-            />
             <NotificationsModal
                 visible={notifsOpen}
                 onClose={() => setNotifsOpen(false)}
@@ -624,8 +731,8 @@ function RoundCard({
             style={({ pressed }) => [
                 styles.round,
                 {
-                    backgroundColor: inProgress ? colors.baobab100 : colors.paper,
-                    borderColor: inProgress ? colors.baobab600 : colors.ink200,
+                    backgroundColor: inProgress ? colors.terra100 : colors.paper,
+                    borderColor: inProgress ? colors.terra600 : colors.ink200,
                     borderWidth: inProgress ? 1.5 : StyleSheet.hairlineWidth,
                     opacity: pressed ? 0.85 : 1,
                 },
@@ -644,7 +751,7 @@ function RoundCard({
                                 styles.roundStatusPill,
                                 {
                                     backgroundColor: inProgress
-                                        ? colors.baobab600
+                                        ? colors.terra600
                                         : colors.brand100,
                                 },
                             ]}
@@ -717,7 +824,7 @@ function RoundCard({
                         styles.progressFill,
                         {
                             backgroundColor: inProgress
-                                ? colors.baobab600
+                                ? colors.terra600
                                 : colors.brand800,
                             width: total > 0 ? `${(done / total) * 100}%` : "0%",
                         },
@@ -823,7 +930,7 @@ const styles = StyleSheet.create({
         alignItems: "center",
         gap: 10,
         padding: 10,
-        borderRadius: 14,
+        borderRadius: 16,
         borderWidth: StyleSheet.hairlineWidth,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
@@ -839,13 +946,43 @@ const styles = StyleSheet.create({
         justifyContent: "center",
     },
     topTitle: {
-        fontFamily: FontFamily.serifMedium,
+        fontFamily: FontFamily.serifSemibold,
         fontSize: 16,
     },
     topSub: {
         fontFamily: FontFamily.uiRegular,
         fontSize: Typography.fontSize.micro,
         marginTop: 1,
+    },
+
+    statsRow: {
+        flexDirection: "row",
+        gap: 9,
+        marginTop: 9,
+    },
+    statTile: {
+        flex: 1,
+        borderRadius: 16,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 6,
+        elevation: 3,
+    },
+    statLabel: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.micro,
+    },
+    statValue: {
+        fontFamily: FontFamily.serifSemibold,
+        fontSize: 17,
+        marginTop: 1,
+    },
+    statValueUnit: {
+        fontFamily: FontFamily.uiRegular,
+        fontSize: Typography.fontSize.xs,
     },
 
     /* Pins */
@@ -866,6 +1003,17 @@ const styles = StyleSheet.create({
     pinLabelText: {
         fontFamily: FontFamily.uiSemibold,
         fontSize: Typography.fontSize.micro,
+    },
+    pinCircleWrap: {
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    pinHalo: {
+        position: "absolute",
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        opacity: 0.3,
     },
     pin: {
         width: 34,
@@ -898,8 +1046,8 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         top: 0,
-        borderTopLeftRadius: 22,
-        borderTopRightRadius: 22,
+        borderTopLeftRadius: 28,
+        borderTopRightRadius: 28,
         borderWidth: StyleSheet.hairlineWidth,
         borderColor: "#e5e7eb",
         shadowColor: "#000",
@@ -938,6 +1086,17 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "center",
     },
+    seeAllLink: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 4,
+        paddingBottom: 12,
+    },
+    seeAllLinkText: {
+        fontFamily: FontFamily.uiSemibold,
+        fontSize: Typography.fontSize.xs,
+    },
     /* `flex:1` + height fixe sur le parent Animated.View → la ScrollView
        remplit toute la hauteur restante après le drawerHeader et scroll
        indépendamment, peu importe la position du drawer (PEEK/MID/FULL). */
@@ -954,7 +1113,7 @@ const styles = StyleSheet.create({
     /* Round card */
     round: {
         padding: 14,
-        borderRadius: 14,
+        borderRadius: 18,
         gap: 10,
     },
     roundHead: {

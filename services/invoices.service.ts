@@ -15,7 +15,15 @@ interface ApiInvoice {
   totalFcfa: string;
   paymentMethod: string | null;
   pdfUrl: string | null;
-  lines?: { description: string; quantity: number; unitPriceFcfa: string; totalFcfa: string }[];
+  lines?: {
+    description: string;
+    quantity: number;
+    unitPriceFcfa: string;
+    totalFcfa: string;
+    orderId?: string | null;
+    weight?: number | null; // grammes
+    order?: { orderNumber: string } | null;
+  }[];
   createdAt: string;
 }
 
@@ -49,6 +57,9 @@ export function mapApiInvoice(i: ApiInvoice): Invoice {
       quantity: l.quantity,
       unitPrice: Number(l.unitPriceFcfa),
       total: Number(l.totalFcfa),
+      orderId: l.orderId ?? undefined,
+      orderNumber: l.order?.orderNumber ?? undefined,
+      weightGrams: l.weight ?? undefined,
     })),
     subtotal: Number(i.subtotalFcfa),
     tax: Number(i.taxAmountFcfa),
@@ -57,6 +68,7 @@ export function mapApiInvoice(i: ApiInvoice): Invoice {
     paidDate: i.paidDate ?? undefined,
     paymentMethod: i.paymentMethod ? METHOD_MAP[i.paymentMethod] : undefined,
     createdAt: i.createdAt,
+    pdfUrl: i.pdfUrl ?? undefined,
   };
 }
 
@@ -70,4 +82,10 @@ export async function listInvoices(params: { clientId?: string; status?: string 
     params: { pageSize: 100, ...params },
   });
   return data.items.map(mapApiInvoice);
+}
+
+/** Détail d'une facture (lignes incluses, chacune reliée à sa commande). */
+export async function getInvoice(id: string): Promise<Invoice> {
+  const { data } = await api.get<ApiInvoice>(`/invoices/${id}`);
+  return mapApiInvoice(data);
 }

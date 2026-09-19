@@ -7,6 +7,11 @@ export interface InvoiceItem {
     quantity: number;
     unitPrice: number;
     total: number;
+    /** Commande d'origine de cette ligne (une facture peut couvrir plusieurs commandes). */
+    orderId?: string;
+    orderNumber?: string;
+    /** Poids réel pesé en usine pour cette ligne (grammes). */
+    weightGrams?: number;
 }
 
 export interface Invoice {
@@ -25,6 +30,8 @@ export interface Invoice {
     paidDate?: string;      // ISO date
     paymentMethod?: PaymentMethod;
     createdAt: string;      // ISO date
+    /** URL relative du PDF déjà généré côté back-office (null si pas encore généré). */
+    pdfUrl?: string | null;
 }
 
 export interface PaymentInfo {

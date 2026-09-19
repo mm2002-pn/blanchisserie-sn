@@ -132,15 +132,10 @@ export default function SupportScreen() {
     return (
         <SafeAreaView
             edges={["top"]}
-            style={[styles.container, { backgroundColor: colors.paper2 }]}
+            style={[styles.container, { backgroundColor: colors.paper }]}
         >
             {/* Top bar */}
-            <View
-                style={[
-                    styles.topBar,
-                    { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
-                ]}
-            >
+            <View style={styles.topBar}>
                 <Pressable
                     onPress={() => router.back()}
                     style={[styles.iconChip, { backgroundColor: colors.ink100 }]}
@@ -549,7 +544,6 @@ const styles = StyleSheet.create({
         gap: 12,
         paddingHorizontal: 16,
         paddingVertical: 12,
-        borderBottomWidth: StyleSheet.hairlineWidth,
     },
     iconChip: {
         width: 34,

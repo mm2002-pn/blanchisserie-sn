@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Stack } from "expo-router";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
@@ -7,6 +7,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { NotificationsProvider } from "@/contexts/NotificationsContext";
 import { OrderProvider } from "@/contexts/OrderContext";
 import { ToastProvider } from "@/contexts/ToastContext";
+import { BootAnimation } from "@/components/shared/BootAnimation";
 import { appFonts } from "@/constants/Fonts";
 import { queryClient } from "@/lib/queryClient";
 import { configureForegroundHandler } from "@/services/push.service";
@@ -17,6 +18,9 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
     const [fontsLoaded, fontError] = useFonts(appFonts);
+    // Séquence de lancement "La Machine" (cf. maquette Animation Logo), jouée
+    // une fois juste après le splash natif, avant le contenu réel.
+    const [bootDone, setBootDone] = useState(false);
 
     useEffect(() => {
         if (fontsLoaded || fontError) {
@@ -26,6 +30,10 @@ export default function RootLayout() {
 
     if (!fontsLoaded && !fontError) {
         return null;
+    }
+
+    if (!bootDone) {
+        return <BootAnimation onDone={() => setBootDone(true)} />;
     }
 
     return (

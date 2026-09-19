@@ -2,6 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { Alert } from 'react-native';
 import { STORAGE_KEYS, getItem } from './storage';
+import { resolveAsset } from '@/lib/assets';
 
 const BASE_URL =
     process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
@@ -54,6 +55,50 @@ export async function downloadOrderDocument(
             Alert.alert(
                 'Document téléchargé',
                 `Enregistré localement : ${result.uri}`,
+            );
+        }
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Erreur inconnue';
+        Alert.alert('Erreur', msg);
+    }
+}
+
+/**
+ * Télécharge le PDF d'une facture déjà généré par le back-office
+ * (`invoice.pdfUrl`, servi en statique public — pas de Bearer requis)
+ * puis le partage via le sheet natif.
+ */
+export async function downloadInvoicePdf(
+    pdfUrl: string,
+    invoiceNumber: string,
+): Promise<void> {
+    const url = resolveAsset(pdfUrl);
+    if (!url) {
+        Alert.alert('PDF indisponible', "Cette facture n'a pas encore de PDF généré.");
+        return;
+    }
+    const localPath = `${FileSystem.cacheDirectory}facture-${invoiceNumber}.pdf`;
+
+    try {
+        const result = await FileSystem.downloadAsync(url, localPath);
+        if (result.status >= 400) {
+            Alert.alert(
+                'Téléchargement échoué',
+                `Le serveur a répondu ${result.status}.`,
+            );
+            return;
+        }
+
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+            await Sharing.shareAsync(result.uri, {
+                mimeType: 'application/pdf',
+                dialogTitle: 'Partager la facture',
+            });
+        } else {
+            Alert.alert(
+                'Facture téléchargée',
+                `Enregistrée localement : ${result.uri}`,
             );
         }
     } catch (err) {

@@ -461,21 +461,19 @@ export default function NewOrderScreen() {
     return (
         <SafeAreaView
             edges={["top"]}
-            style={[styles.container, { backgroundColor: colors.paper2 }]}
+            style={[styles.container, { backgroundColor: colors.paper }]}
         >
             {/* Top bar avec indicateur d'étape */}
-            <View
-                style={[
-                    styles.topBar,
-                    { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
-                ]}
-            >
+            <View style={styles.topBar}>
                 <Pressable
                     onPress={() => (step === 2 ? setStep(1) : router.back())}
-                    style={[styles.iconChip, { backgroundColor: colors.ink100 }]}
+                    style={[
+                        styles.iconChip,
+                        { backgroundColor: colors.paper, borderColor: colors.ink200 },
+                    ]}
                     hitSlop={6}
                 >
-                    <Icon name="chevLeft" size={16} color={colors.ink800} stroke={2} />
+                    <Icon name="chevLeft" size={16} color={colors.ink900} stroke={1.8} />
                 </Pressable>
                 <View style={{ flex: 1 }}>
                     <ThemedText variate="title">
@@ -499,16 +497,11 @@ export default function NewOrderScreen() {
             </View>
 
             {/* Progress bar 2 segments */}
-            <View
-                style={[
-                    styles.progressBar,
-                    { backgroundColor: colors.paper, borderBottomColor: colors.ink200 },
-                ]}
-            >
+            <View style={styles.progressBar}>
                 <View
                     style={[
                         styles.progressSeg,
-                        { backgroundColor: colors.brand800 },
+                        { backgroundColor: colors.brand900 },
                     ]}
                 />
                 <View
@@ -516,7 +509,7 @@ export default function NewOrderScreen() {
                         styles.progressSeg,
                         {
                             backgroundColor:
-                                step === 2 ? colors.brand800 : colors.ink200,
+                                step === 2 ? colors.brand900 : colors.ink200,
                         },
                     ]}
                 />
@@ -535,7 +528,7 @@ export default function NewOrderScreen() {
                     {step === 2 && (
                     <>
                     {/* Services */}
-                    <ThemedText variate="caps" color="ink500" style={styles.sectionLabel}>
+                    <ThemedText variate="caps" color="terra700" style={styles.sectionLabel}>
                         Type de service
                     </ThemedText>
                     {servicesLoading && SERVICES.length === 0 ? (
@@ -557,9 +550,9 @@ export default function NewOrderScreen() {
                                     style={[
                                         styles.chip,
                                         {
-                                            backgroundColor: active ? colors.brand800 : colors.paper,
+                                            backgroundColor: active ? colors.brand900 : colors.paper,
                                             borderColor: active
-                                                ? colors.brand800
+                                                ? colors.brand900
                                                 : colors.ink200,
                                         },
                                     ]}
@@ -580,7 +573,7 @@ export default function NewOrderScreen() {
                     {/* Schedule : pickup time (above articles for quick access) */}
                     <ThemedText
                         variate="caps"
-                        color="ink500"
+                        color="terra700"
                         style={[styles.sectionLabel, { marginTop: 18 }]}
                     >
                         Collecte
@@ -629,7 +622,7 @@ export default function NewOrderScreen() {
                     {/* Localisation collecte — aide le chauffeur sur la carte */}
                     <ThemedText
                         variate="caps"
-                        color="ink500"
+                        color="terra700"
                         style={[styles.sectionLabel, { marginTop: 18 }]}
                     >
                         Localisation collecte · optionnel
@@ -643,7 +636,7 @@ export default function NewOrderScreen() {
                     {/* Instructions — placées dans l'étape "Quand" pour libérer la liste articles */}
                     <ThemedText
                         variate="caps"
-                        color="ink500"
+                        color="terra700"
                         style={[styles.sectionLabel, { marginTop: 18 }]}
                     >
                         Instructions · optionnel
@@ -671,7 +664,7 @@ export default function NewOrderScreen() {
                     {/* Category filter */}
                     <ThemedText
                         variate="caps"
-                        color="ink500"
+                        color="terra700"
                         style={[styles.sectionLabel, { marginTop: 22 }]}
                     >
                         Articles
@@ -764,7 +757,7 @@ export default function NewOrderScreen() {
                             style={[
                                 styles.cta,
                                 {
-                                    backgroundColor: colors.brand800,
+                                    backgroundColor: colors.brand900,
                                     opacity: totalPieces === 0 ? 0.5 : 1,
                                 },
                             ]}
@@ -781,7 +774,7 @@ export default function NewOrderScreen() {
                             style={[
                                 styles.cta,
                                 {
-                                    backgroundColor: colors.brand800,
+                                    backgroundColor: colors.brand900,
                                     opacity: loading || !collectionDate ? 0.5 : 1,
                                 },
                             ]}
@@ -848,7 +841,7 @@ function LinenCard({
                     styles.row,
                     {
                         backgroundColor: active ? colors.brand50 : colors.paper,
-                        borderColor: active ? colors.brand800 : colors.ink200,
+                        borderColor: active ? colors.brand900 : colors.ink200,
                         borderWidth: active ? 1.5 : StyleSheet.hairlineWidth,
                     },
                 ]}
@@ -905,7 +898,7 @@ function LinenCard({
                             styles.qtyField,
                             {
                                 backgroundColor: active ? colors.paper : colors.paper2,
-                                borderColor: active ? colors.brand800 : colors.ink300,
+                                borderColor: active ? colors.brand900 : colors.ink300,
                             },
                         ]}
                     >
@@ -922,7 +915,7 @@ function LinenCard({
                     <Pressable
                         onPress={() => onChange(qty + 1)}
                         hitSlop={6}
-                        style={[styles.gridStepBtn, { backgroundColor: colors.brand800 }]}
+                        style={[styles.gridStepBtn, { backgroundColor: colors.brand900 }]}
                     >
                         <Icon name="plus" size={14} color={colors.paper} stroke={2.2} />
                     </Pressable>
@@ -950,12 +943,12 @@ const styles = StyleSheet.create({
         gap: 12,
         paddingHorizontal: 16,
         paddingVertical: 12,
-        borderBottomWidth: StyleSheet.hairlineWidth,
     },
     iconChip: {
-        width: 34,
-        height: 34,
-        borderRadius: 99,
+        width: 38,
+        height: 38,
+        borderRadius: 12,
+        borderWidth: StyleSheet.hairlineWidth,
         alignItems: "center",
         justifyContent: "center",
     },
@@ -966,7 +959,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingTop: 8,
         paddingBottom: 10,
-        borderBottomWidth: StyleSheet.hairlineWidth,
     },
     progressSeg: {
         flex: 1,
@@ -1034,12 +1026,12 @@ const styles = StyleSheet.create({
         alignItems: "center",
         gap: 12,
         padding: 10,
-        borderRadius: 14,
+        borderRadius: 16,
     },
     rowThumb: {
         width: 56,
         height: 56,
-        borderRadius: 10,
+        borderRadius: 12,
     },
     rowThumbPlaceholder: {
         alignItems: "center",
@@ -1060,9 +1052,9 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     gridStepBtn: {
-        width: 30,
-        height: 30,
-        borderRadius: 8,
+        width: 34,
+        height: 34,
+        borderRadius: 12,
         borderWidth: StyleSheet.hairlineWidth,
         alignItems: "center",
         justifyContent: "center",
@@ -1101,7 +1093,7 @@ const styles = StyleSheet.create({
         gap: 8,
         paddingHorizontal: 12,
         paddingVertical: 12,
-        borderRadius: 10,
+        borderRadius: 16,
         borderWidth: StyleSheet.hairlineWidth,
     },
     timeField: {
@@ -1110,7 +1102,7 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         paddingHorizontal: 12,
         paddingVertical: 12,
-        borderRadius: 10,
+        borderRadius: 16,
         borderWidth: StyleSheet.hairlineWidth,
     },
     dateInput: {
@@ -1127,10 +1119,10 @@ const styles = StyleSheet.create({
         minWidth: 60,
     },
     textareaWrap: {
-        borderRadius: 10,
+        borderRadius: 16,
         borderWidth: StyleSheet.hairlineWidth,
-        padding: 12,
-        minHeight: 80,
+        padding: 14,
+        minHeight: 88,
     },
     textarea: {
         fontFamily: FontFamily.uiRegular,
@@ -1174,9 +1166,9 @@ const styles = StyleSheet.create({
         fontSize: Typography.fontSize.sm,
     },
     cta: {
-        paddingVertical: 14,
+        height: 54,
         paddingHorizontal: 18,
-        borderRadius: 12,
+        borderRadius: 16,
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
