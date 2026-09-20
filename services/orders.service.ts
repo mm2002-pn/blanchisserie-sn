@@ -129,6 +129,7 @@ export async function createOrder(form: OrderFormData) {
     instructions: form.instructions,
     pickupGeoLat: form.pickupGeoLat,
     pickupGeoLng: form.pickupGeoLng,
+    clientId: form.clientId,
   };
   const { data } = await api.post<ApiOrder>('/orders', payload);
   return mapApiOrder(data);

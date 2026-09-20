@@ -497,6 +497,13 @@ export default function DriverRouteScreen() {
                             {activeRounds.length > 1 ? "s" : ""}
                         </Text>
                     </View>
+                    <Pressable
+                        onPress={() => router.push("/(driver)/new-collection")}
+                        hitSlop={6}
+                        style={[styles.topIcon, { backgroundColor: colors.terra100 }]}
+                    >
+                        <Icon name="plus" size={16} color={colors.terra700} />
+                    </Pressable>
                     <NotificationBell onPress={() => setNotifsOpen(true)} />
                     <Pressable
                         onPress={handleLogout}

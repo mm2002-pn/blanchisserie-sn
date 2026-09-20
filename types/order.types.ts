@@ -81,4 +81,7 @@ export interface OrderFormData {
     /** Localisation cible où le chauffeur viendra collecter. */
     pickupGeoLat?: number;
     pickupGeoLng?: number;
+    /** Requis quand le créateur n'est pas un compte hôtel (ex: chauffeur créant
+     *  une collecte sur place) — ignoré côté serveur si le créateur EST l'hôtel. */
+    clientId?: string;
 }

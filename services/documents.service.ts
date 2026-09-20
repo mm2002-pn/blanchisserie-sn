@@ -3,9 +3,7 @@ import * as Sharing from 'expo-sharing';
 import { Alert } from 'react-native';
 import { STORAGE_KEYS, getItem } from './storage';
 import { resolveAsset } from '@/lib/assets';
-
-const BASE_URL =
-    process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+import { API_URL as BASE_URL } from '@/constants/Api';
 
 export type OrderDocumentType =
     | 'bon-commande'

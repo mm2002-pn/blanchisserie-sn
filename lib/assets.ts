@@ -1,3 +1,5 @@
+import { API_URL } from '@/constants/Api';
+
 /**
  * Résout une URL d'asset retournée par l'API.
  *
@@ -8,8 +10,7 @@
 export function resolveAsset(url: string | null | undefined): string | undefined {
     if (!url) return undefined;
     if (/^https?:\/\//i.test(url)) return url;
-    const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
     // L'API préfixe /api/v1 ; les assets sont servis depuis la racine (sans /api/v1).
-    const host = apiUrl.replace(/\/api\/v\d+\/?$/, '');
+    const host = API_URL.replace(/\/api\/v\d+\/?$/, '');
     return `${host}${url.startsWith('/') ? '' : '/'}${url}`;
 }

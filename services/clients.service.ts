@@ -24,3 +24,12 @@ export async function getClient(id: string): Promise<ApiClient> {
     const { data } = await api.get<ApiClient>(`/clients/${id}`);
     return data;
 }
+
+/** Liste des clients (hôtels/restos) — réservé aux rôles internes + chauffeur
+ *  (permet au chauffeur de choisir pour qui créer une collecte sur place). */
+export async function listClients(search?: string): Promise<ApiClient[]> {
+    const { data } = await api.get<{ items: ApiClient[] }>('/clients', {
+        params: { pageSize: 100, ...(search ? { search } : {}) },
+    });
+    return data.items;
+}

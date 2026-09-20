@@ -1,4 +1,5 @@
 import axios, { AxiosError, type AxiosRequestConfig } from 'axios';
+import { API_URL } from '@/constants/Api';
 import { STORAGE_KEYS, clearAuth, getItem, setItem } from './storage';
 
 /**
@@ -8,8 +9,7 @@ import { STORAGE_KEYS, clearAuth, getItem, setItem } from './storage';
  *  - Si refresh échoue → flush tokens (l'app détectera la déconnexion via AuthContext)
  */
 
-const BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+const BASE_URL = API_URL;
 
 export interface ApiErrorBody {
   error?: { code: string; message: string; details?: unknown };

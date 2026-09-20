@@ -1,5 +1,6 @@
 import { Fragment, useMemo, useState } from "react";
 import {
+    ActivityIndicator,
     Alert,
     Pressable,
     ScrollView,
@@ -101,7 +102,7 @@ export default function OrderDetailsScreen() {
     const { cancelOrder, isLoading } = useOrderContext();
 
     const orderId = params.id as string;
-    const { data: liveOrder } = useOrder(orderId);
+    const { data: liveOrder, isPending: orderPending } = useOrder(orderId);
     const order = useMemo<Order | null>(() => liveOrder ?? null, [liveOrder]);
     const [cancelling, setCancelling] = useState(false);
 
@@ -118,6 +119,19 @@ export default function OrderDetailsScreen() {
         for (const lt of apiLinens) m[lt.code] = (lt.averageWeight ?? 0) / 1000;
         return m;
     }, [apiLinens]);
+
+    if (orderPending) {
+        return (
+            <SafeAreaView
+                edges={["top"]}
+                style={[styles.container, { backgroundColor: colors.paper }]}
+            >
+                <View style={styles.emptyState}>
+                    <ActivityIndicator size="large" color={colors.brand800} />
+                </View>
+            </SafeAreaView>
+        );
+    }
 
     if (!order) {
         return (
@@ -192,7 +206,11 @@ export default function OrderDetailsScreen() {
     return (
         <View style={[styles.container, { backgroundColor: colors.paper }]}>
             <StatusBarSpace color={colors.brand900} />
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never"
+            >
                 {/* Header marine — id, date de création, badge de statut.
                     Défile avec le contenu (pas sticky), comme dans la maquette. */}
                 <MarineHeader style={styles.heroHeader}>

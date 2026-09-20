@@ -109,6 +109,8 @@ export default function HotelProfileScreen() {
             <ScrollView
                 contentContainerStyle={styles.content}
                 showsVerticalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never"
             >
                 {/* Header marine — identité établissement */}
                 <MarineHeader style={styles.header}>

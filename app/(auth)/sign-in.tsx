@@ -63,12 +63,16 @@ export default function SignInScreen() {
         <View style={[styles.container, { backgroundColor: colors.brand900 }]}>
         <KeyboardAvoidingView
             style={styles.container}
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            // Android : le clavier resize déjà la fenêtre nativement
+            // (windowSoftInputMode="adjustResize", par défaut sur Expo). Ajouter
+            // behavior="height" ici fait doublement compenser la même ouverture
+            // (fenêtre ET vue) → le contenu "saute"/se déforme à la frappe.
+            // undefined = on laisse l'OS gérer, KeyboardAvoidingView ne touche à rien.
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
             <ScrollView
                 contentContainerStyle={styles.scroll}
                 keyboardShouldPersistTaps="handled"
-                automaticallyAdjustKeyboardInsets
                 bounces={false}
             >
                 <View style={styles.hero}>

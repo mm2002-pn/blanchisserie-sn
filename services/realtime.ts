@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { useAuth } from '@/contexts/AuthContext';
-
-const WS_URL = process.env.EXPO_PUBLIC_WS_URL ?? 'http://localhost:4000';
+import { WS_URL } from '@/constants/Api';
 
 /**
  * Hook React Native pour Socket.IO authentifié.
